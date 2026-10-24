@@ -3,8 +3,8 @@
 Next.js demo for library and classroom temperature.
 
 - `/` explains the policy
-- `/rooms` and `/rooms/[id]` are the in-room hot or cold vote
-- `/dashboard` compares each room with a fixed setpoint
+- `/dashboard` is the admin view for every room, including the hot or cold vote
+- `/rooms` and `/rooms/[id]` open that same dashboard
 - `/simulator` edits the same factors the model uses
 
 ```sh

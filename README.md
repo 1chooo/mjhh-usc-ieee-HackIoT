@@ -44,7 +44,7 @@ pnpm --filter device-gateway dev
 
 `web` listens on port 3000. `device-gateway` listens on port 4000.
 
-The web demo has a landing page, an in-room hot/cold vote (`/rooms`), a dashboard, and a simulator for the temperature factors. Readings and votes stay in the browser.
+The web demo has a landing page, an admin dashboard for each room, and a simulator for the temperature factors. Readings and votes stay in the browser.
 
 ## Firmware and training
 
