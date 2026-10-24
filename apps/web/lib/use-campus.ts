@@ -141,9 +141,26 @@ export function useCampus() {
     });
   }
 
+  function setRoomOpen(spaceId: string, scheduledOpen: boolean) {
+    if (!ready) {
+      return;
+    }
+    const reading = state.readings[spaceId];
+    if (!reading || reading.scheduledOpen === scheduledOpen) {
+      return;
+    }
+    update({
+      readings: {
+        ...state.readings,
+        [spaceId]: { ...reading, scheduledOpen },
+      },
+      myVotes: state.myVotes,
+    });
+  }
+
   function reset() {
     update(defaultCampusState());
   }
 
-  return { ready, ...state, castVote, clearVote, reset };
+  return { ready, ...state, castVote, clearVote, setRoomOpen, reset };
 }
