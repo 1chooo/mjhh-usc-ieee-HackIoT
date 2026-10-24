@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import Link from "next/link";
 import { SiteHeader } from "../components/site-header";
 import "./globals.css";
 
@@ -46,7 +47,15 @@ export default function RootLayout({
           {children}
         </main>
         <footer className="colophon">
-          <p className="colophon-inner">Not a live HVAC controller.</p>
+          <div className="colophon-inner flex flex-col gap-4">
+            <nav className="colophon-links" aria-label="Footer">
+              <Link href="/rooms">Rooms</Link>
+              <Link href="/impact">Impact</Link>
+              <Link href="/dashboard">Dashboard</Link>
+              <Link href="/simulator">Simulator</Link>
+            </nav>
+            <p>Not a live HVAC controller.</p>
+          </div>
         </footer>
       </body>
     </html>
