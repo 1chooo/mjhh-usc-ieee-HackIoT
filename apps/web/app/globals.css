@@ -146,8 +146,7 @@ h2 {
 
 .card h2,
 .vote-panel h2,
-.result-card h2,
-.room-scene-head h2 {
+.result-card h2 {
   max-width: none;
   font-size: 1.75rem;
   line-height: 1.2;
@@ -427,7 +426,6 @@ h2 {
 .note,
 .formula,
 .votes p,
-.factors span,
 .summary + p,
 .room-index .meta {
   color: var(--muted);
@@ -436,8 +434,7 @@ h2 {
 }
 
 .lede,
-.summary,
-.factors span {
+.summary {
   max-width: 40rem;
   font-size: 1.125rem;
   line-height: 1.6;
@@ -882,29 +879,6 @@ legend {
   accent-color: var(--ink);
 }
 
-.factors {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.factors li {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px 0;
-  border-top: 1px solid var(--line);
-}
-
-.factors strong {
-  font-size: 1.125rem;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
 .formula {
   font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
   font-size: 0.75rem;
@@ -947,50 +921,6 @@ legend {
 
 .bar span.policy {
   background: var(--ink);
-}
-
-.room-scene {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.room-scene-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: end;
-}
-
-.room-scene-head h2 {
-  margin-top: 8px;
-}
-
-.room-stage {
-  position: relative;
-  height: 520px;
-  border: 1px solid var(--ink);
-  border-radius: 4px;
-  background-color: var(--card);
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 40px 40px;
-  overflow: hidden;
-}
-
-.room-air,
-.stage-hit {
-  position: absolute;
-  inset: 0;
-}
-
-.room-air {
-  pointer-events: none;
-}
-
-.stage-hit {
-  z-index: 1;
 }
 
 .room-picker {
@@ -1042,173 +972,6 @@ legend {
 .room-picker button[aria-selected="true"] {
   box-shadow: inset 2px 0 0 var(--ink);
   padding-left: 14px;
-}
-
-.thing {
-  position: absolute;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--line-strong);
-  background: color-mix(in oklch, var(--ink) 4%, var(--card));
-  color: var(--ink);
-  transform: translate(-50%, -50%);
-}
-
-.thing.selected {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 2px var(--ink);
-}
-
-.thing.person {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  color: var(--ink);
-  background: var(--card);
-  border-color: var(--ink);
-}
-
-.thing.person svg {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-}
-
-.thing.person.hot {
-  background: var(--hot);
-  border-color: var(--hot);
-  color: var(--bg);
-}
-
-.thing.person.cold {
-  background: var(--cold);
-  border-color: var(--cold);
-  color: var(--bg);
-}
-
-.thing.table {
-  width: 132px;
-  height: 68px;
-  border-radius: 4px;
-}
-
-.thing.desk {
-  width: 78px;
-  height: 32px;
-  border-radius: 4px;
-}
-
-.thing.shelf {
-  width: 48px;
-  height: 168px;
-  border-radius: 4px;
-}
-
-.thing.temperature,
-.thing.humidity,
-.thing.occupancy,
-.thing.outdoor {
-  width: 72px;
-  height: 52px;
-  border-radius: 4px;
-  flex-direction: column;
-  gap: 1px;
-  background: var(--card);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.thing.temperature strong,
-.thing.humidity strong,
-.thing.occupancy strong,
-.thing.outdoor strong {
-  color: var(--ink);
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  text-transform: none;
-}
-
-.furniture-label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.room-stage.closed {
-  filter: saturate(0.75);
-}
-
-.room-windows,
-.room-door,
-.room-closed {
-  position: absolute;
-  z-index: 1;
-}
-
-.room-windows {
-  top: 16px;
-  right: 18px;
-  width: 28%;
-  height: 54px;
-  border-radius: 4px;
-  display: flex;
-  align-items: end;
-  padding: 8px;
-  color: var(--ink);
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.room-windows span {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--bg) 88%, transparent);
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.room-door {
-  left: 0;
-  bottom: 28px;
-  width: 22px;
-  height: 72px;
-  border-radius: 0 4px 4px 0;
-  border: 1px solid var(--line-strong);
-  border-left: 0;
-  background: var(--card);
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  writing-mode: vertical-rl;
-}
-
-.room-closed {
-  z-index: 3;
-  pointer-events: none;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--bg);
-  font-weight: 500;
 }
 
 .colophon {
@@ -1302,9 +1065,25 @@ legend {
 }
 
 @media (max-width: 800px) {
-  .room-scene-head {
-    flex-direction: column;
-    align-items: flex-start;
+  .sim-top {
+    padding-right: 20px;
+  }
+
+  .sim-toolbar {
+    width: calc(100% - 8.5rem);
+  }
+
+  .sim-drawer {
+    top: 10.5rem;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .sim-detail {
+    right: 12px;
+    width: auto;
   }
 
   .hero h1 span {
@@ -1358,6 +1137,141 @@ legend {
     padding-top: 4.5rem;
     padding-bottom: 4.5rem;
   }
+}
+
+body:has(.sim-shell) .shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+body:has(.sim-shell) .colophon {
+  display: none;
+}
+
+.sim-shell {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.sim-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.sim-stage > div {
+  width: 100%;
+  height: 100%;
+}
+
+.sim-loading {
+  position: absolute;
+  top: 7rem;
+  left: 24px;
+}
+
+.sim-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sim-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6.25rem 20px 0;
+}
+
+.sim-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 9rem);
+}
+
+.sim-top .preset-row {
+  flex: 1 1 100%;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.sim-top .preset-row .ghost {
+  flex: none;
+}
+
+.sim-top > * {
+  pointer-events: auto;
+}
+
+.sim-overlay .ghost {
+  background: color-mix(in oklch, var(--card) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.sim-overlay .ghost[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.sim-factors {
+  position: absolute;
+  top: 6.25rem;
+  right: 16px;
+  z-index: 3;
+  pointer-events: auto;
+}
+
+.sim-drawer {
+  pointer-events: auto;
+  position: absolute;
+  top: 10.75rem;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2;
+  width: min(380px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--card) 94%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+
+.sim-drawer .result-card {
+  position: static;
+}
+
+.sim-detail {
+  position: absolute;
+  left: 20px;
+  bottom: 64px;
+  z-index: 2;
+  width: min(320px, calc(100% - 40px));
+  pointer-events: auto;
+  background: color-mix(in oklch, var(--card) 94%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.sim-reading {
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 1.75rem;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
 }
 
 @media (prefers-reduced-motion: reduce) {

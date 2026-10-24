@@ -11,7 +11,9 @@ import {
 import { evaluate, type Scenario, type SpaceKind } from "../lib/thermal";
 import { useCampus } from "../lib/use-campus";
 import { ResultBlock } from "./result-block";
-import { RoomScene } from "./room-scene";
+import { DetailCard } from "./sim/detail-card";
+import { SimStage } from "./sim/sim-stage";
+import type { SimMode, SimPick } from "./sim/sim-types";
 
 export function SimulatorView() {
   const params = useSearchParams();
@@ -19,8 +21,16 @@ export function SimulatorView() {
   const [scenario, setScenario] = useState<Scenario>(
     simulatorPresets[0]!.scenario,
   );
-  const [layoutToken, setLayoutToken] = useState(0);
+  const [mode, setMode] = useState<SimMode>("room");
+  const [pick, setPick] = useState<SimPick | null>(null);
+  const [factorsOpen, setFactorsOpen] = useState(true);
   const applied = useRef(false);
+
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 800px)").matches) {
+      setFactorsOpen(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!campus.ready || applied.current) {
@@ -38,6 +48,12 @@ export function SimulatorView() {
     }
   }, [campus.ready, campus.readings, params]);
 
+  useEffect(() => {
+    if (pick?.type === "person" && pick.index >= Math.round(scenario.occupancy)) {
+      setPick(null);
+    }
+  }, [pick, scenario.occupancy]);
+
   const result = evaluate(scenario);
 
   function patch(partial: Partial<Scenario>) {
@@ -46,19 +62,62 @@ export function SimulatorView() {
 
   function loadScenario(next: Scenario) {
     setScenario(settle(next));
-    setLayoutToken((token) => token + 1);
+    setPick(null);
+    setMode("room");
+  }
+
+  function showMode(next: SimMode) {
+    setMode(next);
+    setPick(null);
+  }
+
+  function openSpace(spaceId: string) {
+    const space = getSpace(spaceId);
+    const reading = campus.readings[spaceId];
+    if (!space || !reading) {
+      return;
+    }
+    loadScenario(scenarioFrom(space, reading));
   }
 
   return (
-    <div className="stack">
-      <RoomScene
-        scenario={scenario}
-        result={result}
-        layoutToken={layoutToken}
-        onChange={patch}
-      />
-      <div className="split">
-        <section className="stack">
+    <section className="sim-shell" aria-label="Room simulator">
+      <div className="sim-stage">
+        <SimStage
+          mode={mode}
+          scenario={scenario}
+          result={result}
+          readings={campus.readings}
+          selected={pick}
+          onSelect={setPick}
+          onSelectSpace={openSpace}
+        />
+      </div>
+      <div className="sim-overlay">
+        <div className="sim-top">
+          <div className="sim-toolbar">
+            <div className="choice-row">
+              <button
+                type="button"
+                className="ghost"
+                aria-pressed={mode === "room"}
+                onClick={() => showMode("room")}
+              >
+                Room
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                aria-pressed={mode === "campus"}
+                onClick={() => showMode("campus")}
+              >
+                Campus
+              </button>
+            </div>
+            <p className={`badge ${result.action}`}>
+              {result.action} · {result.targetC.toFixed(1)}°C
+            </p>
+          </div>
           <div className="preset-row">
             {simulatorPresets.map((preset) => (
               <button
@@ -75,185 +134,191 @@ export function SimulatorView() {
                 key={space.id}
                 type="button"
                 className="ghost"
-                onClick={() => {
-                  const reading = campus.readings[space.id];
-                  if (reading) {
-                    loadScenario(scenarioFrom(space, reading));
-                  }
-                }}
+                onClick={() => openSpace(space.id)}
               >
-                Live {space.name}
+                {space.name}
               </button>
             ))}
           </div>
-          <fieldset>
-            <legend>Room</legend>
-            <div className="choice-row">
-              {(["library", "classroom"] as SpaceKind[]).map((kind) => (
+        </div>
+        <button
+          type="button"
+          className="ghost sim-factors"
+          aria-expanded={factorsOpen}
+          onClick={() => setFactorsOpen((open) => !open)}
+        >
+          {factorsOpen ? "Hide factors" : "Factors"}
+        </button>
+        {pick ? (
+          <DetailCard
+            pick={pick}
+            scenario={scenario}
+            onClose={() => setPick(null)}
+          />
+        ) : null}
+        {factorsOpen ? (
+          <aside className="sim-drawer" aria-label="Scenario factors">
+            <fieldset>
+              <legend>Room</legend>
+              <div className="choice-row">
+                {(["library", "classroom"] as SpaceKind[]).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className="ghost"
+                    aria-pressed={scenario.kind === kind}
+                    onClick={() => patch({ kind })}
+                  >
+                    {kind}
+                  </button>
+                ))}
+              </div>
+              <Slider
+                label="Floor area"
+                min={80}
+                max={800}
+                step={10}
+                unit="m²"
+                value={scenario.floorAreaM2}
+                onChange={(floorAreaM2) => patch({ floorAreaM2 })}
+              />
+              <Slider
+                label="Capacity"
+                min={10}
+                max={200}
+                step={1}
+                unit="people"
+                value={scenario.capacity}
+                onChange={(capacity) => patch({ capacity })}
+              />
+            </fieldset>
+            <fieldset>
+              <legend>Readings</legend>
+              <Slider
+                label="Outdoor temperature"
+                min={0}
+                max={40}
+                step={0.5}
+                unit="°C"
+                value={scenario.outdoorC}
+                onChange={(outdoorC) => patch({ outdoorC })}
+              />
+              <Slider
+                label="Indoor temperature"
+                min={16}
+                max={32}
+                step={0.1}
+                unit="°C"
+                value={scenario.indoorC}
+                onChange={(indoorC) => patch({ indoorC })}
+              />
+              <Slider
+                label="Relative humidity"
+                min={20}
+                max={90}
+                step={1}
+                unit="%"
+                value={scenario.humidityPct}
+                onChange={(humidityPct) => patch({ humidityPct })}
+              />
+            </fieldset>
+            <fieldset>
+              <legend>People</legend>
+              <div className="choice-row">
                 <button
-                  key={kind}
                   type="button"
                   className="ghost"
-                  aria-pressed={scenario.kind === kind}
-                  onClick={() => patch({ kind })}
+                  aria-pressed={scenario.scheduledOpen}
+                  onClick={() =>
+                    patch({ scheduledOpen: !scenario.scheduledOpen })
+                  }
                 >
-                  {kind}
+                  {scenario.scheduledOpen ? "Room is open" : "Room is closed"}
                 </button>
-              ))}
+              </div>
+              <Slider
+                label="Occupancy"
+                min={0}
+                max={scenario.capacity}
+                step={1}
+                unit="people"
+                value={scenario.occupancy}
+                onChange={(occupancy) => patch({ occupancy })}
+              />
+              <Slider
+                label="Hot votes"
+                min={0}
+                max={scenario.occupancy}
+                step={1}
+                unit="votes"
+                value={scenario.hotVotes}
+                onChange={(hotVotes) => patch({ hotVotes })}
+              />
+              <Slider
+                label="Cold votes"
+                min={0}
+                max={scenario.occupancy}
+                step={1}
+                unit="votes"
+                value={scenario.coldVotes}
+                onChange={(coldVotes) => patch({ coldVotes })}
+              />
+              <Slider
+                label="Full-vote influence"
+                min={0}
+                max={2.5}
+                step={0.1}
+                unit="°C"
+                value={scenario.voteInfluenceC}
+                onChange={(voteInfluenceC) => patch({ voteInfluenceC })}
+              />
+              <Slider
+                label="Heat from one person"
+                min={60}
+                max={150}
+                step={5}
+                unit="W"
+                value={scenario.wattsPerPerson}
+                onChange={(wattsPerPerson) => patch({ wattsPerPerson })}
+              />
+            </fieldset>
+            <fieldset>
+              <legend>Plant and the hour</legend>
+              <Slider
+                label="Deadband"
+                min={0.2}
+                max={1.5}
+                step={0.1}
+                unit="°C"
+                value={scenario.deadbandC}
+                onChange={(deadbandC) => patch({ deadbandC })}
+              />
+              <Slider
+                label="Envelope loss"
+                min={0.6}
+                max={4}
+                step={0.1}
+                unit="W/m²·K"
+                value={scenario.lossWPerM2K}
+                onChange={(lossWPerM2K) => patch({ lossWPerM2K })}
+              />
+              <Slider
+                label="Hours compared"
+                min={1}
+                max={8}
+                step={1}
+                unit="h"
+                value={scenario.hours}
+                onChange={(hours) => patch({ hours })}
+              />
+            </fieldset>
+            <div className="result-card">
+              <ResultBlock result={result} />
             </div>
-            <Slider
-              label="Floor area"
-              min={80}
-              max={800}
-              step={10}
-              unit="m²"
-              value={scenario.floorAreaM2}
-              onChange={(floorAreaM2) => patch({ floorAreaM2 })}
-            />
-            <Slider
-              label="Capacity"
-              min={10}
-              max={200}
-              step={1}
-              unit="people"
-              value={scenario.capacity}
-              onChange={(capacity) => patch({ capacity })}
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Readings</legend>
-            <Slider
-              label="Outdoor temperature"
-              min={0}
-              max={40}
-              step={0.5}
-              unit="°C"
-              value={scenario.outdoorC}
-              onChange={(outdoorC) => patch({ outdoorC })}
-            />
-            <Slider
-              label="Indoor temperature"
-              min={16}
-              max={32}
-              step={0.1}
-              unit="°C"
-              value={scenario.indoorC}
-              onChange={(indoorC) => patch({ indoorC })}
-            />
-            <Slider
-              label="Relative humidity"
-              min={20}
-              max={90}
-              step={1}
-              unit="%"
-              value={scenario.humidityPct}
-              onChange={(humidityPct) => patch({ humidityPct })}
-            />
-          </fieldset>
-          <fieldset>
-            <legend>People</legend>
-            <div className="choice-row">
-              <button
-                type="button"
-                className="ghost"
-                aria-pressed={scenario.scheduledOpen}
-                onClick={() =>
-                  patch({ scheduledOpen: !scenario.scheduledOpen })
-                }
-              >
-                {scenario.scheduledOpen ? "Room is open" : "Room is closed"}
-              </button>
-            </div>
-            <Slider
-              label="Occupancy"
-              min={0}
-              max={scenario.capacity}
-              step={1}
-              unit="people"
-              value={scenario.occupancy}
-              onChange={(occupancy) => patch({ occupancy })}
-            />
-            <Slider
-              label="Hot votes"
-              min={0}
-              max={scenario.occupancy}
-              step={1}
-              unit="votes"
-              value={scenario.hotVotes}
-              onChange={(hotVotes) => patch({ hotVotes })}
-            />
-            <Slider
-              label="Cold votes"
-              min={0}
-              max={scenario.occupancy}
-              step={1}
-              unit="votes"
-              value={scenario.coldVotes}
-              onChange={(coldVotes) => patch({ coldVotes })}
-            />
-            <Slider
-              label="Full-vote influence"
-              min={0}
-              max={2.5}
-              step={0.1}
-              unit="°C"
-              value={scenario.voteInfluenceC}
-              onChange={(voteInfluenceC) => patch({ voteInfluenceC })}
-            />
-            <Slider
-              label="Heat from one person"
-              min={60}
-              max={150}
-              step={5}
-              unit="W"
-              value={scenario.wattsPerPerson}
-              onChange={(wattsPerPerson) => patch({ wattsPerPerson })}
-            />
-          </fieldset>
-          <fieldset>
-            <legend>Plant and the hour</legend>
-            <Slider
-              label="Deadband"
-              min={0.2}
-              max={1.5}
-              step={0.1}
-              unit="°C"
-              value={scenario.deadbandC}
-              onChange={(deadbandC) => patch({ deadbandC })}
-            />
-            <Slider
-              label="Envelope loss"
-              min={0.6}
-              max={4}
-              step={0.1}
-              unit="W/m²·K"
-              value={scenario.lossWPerM2K}
-              onChange={(lossWPerM2K) => patch({ lossWPerM2K })}
-            />
-            <Slider
-              label="Hours compared"
-              min={1}
-              max={8}
-              step={1}
-              unit="h"
-              value={scenario.hours}
-              onChange={(hours) => patch({ hours })}
-            />
-          </fieldset>
-        </section>
-        <aside className="stack result-card">
-          <ResultBlock result={result} />
-          <ul className="factors">
-            {result.factors.map((factor) => (
-              <li key={factor.name}>
-                <strong>{factor.name}</strong>
-                <span>{factor.detail}</span>
-              </li>
-            ))}
-          </ul>
-        </aside>
+          </aside>
+        ) : null}
       </div>
-    </div>
+    </section>
   );
 }
 
