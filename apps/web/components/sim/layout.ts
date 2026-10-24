@@ -7,11 +7,13 @@ export type Block = {
   color: string;
 };
 
+export type PersonVote = "hot" | "cold" | "none";
+
 export function voteAt(
   index: number,
   hotVotes: number,
   coldVotes: number,
-): "hot" | "cold" | "none" {
+): PersonVote {
   const hot = Math.max(0, Math.round(hotVotes));
   const cold = Math.max(0, Math.round(coldVotes));
   if (index < hot) {
@@ -21,6 +23,76 @@ export function voteAt(
     return "cold";
   }
   return "none";
+}
+
+export function votesFromCounts(
+  occupancy: number,
+  hotVotes: number,
+  coldVotes: number,
+): PersonVote[] {
+  const count = Math.max(0, Math.round(occupancy));
+  const votes: PersonVote[] = [];
+  for (let index = 0; index < count; index += 1) {
+    votes.push(voteAt(index, hotVotes, coldVotes));
+  }
+  return votes;
+}
+
+export function activePersonVotes(
+  occupancy: number,
+  hotVotes: number,
+  coldVotes: number,
+  votes: PersonVote[] | null,
+): PersonVote[] | null {
+  const count = Math.max(0, Math.round(occupancy));
+  if (!votes || votes.length !== count) {
+    return null;
+  }
+  let hot = 0;
+  let cold = 0;
+  for (const vote of votes) {
+    if (vote === "hot") {
+      hot += 1;
+    } else if (vote === "cold") {
+      cold += 1;
+    }
+  }
+  if (
+    hot !== Math.max(0, Math.round(hotVotes)) ||
+    cold !== Math.max(0, Math.round(coldVotes))
+  ) {
+    return null;
+  }
+  return votes;
+}
+
+export function castPersonVote(
+  occupancy: number,
+  hotVotes: number,
+  coldVotes: number,
+  votes: PersonVote[] | null,
+  index: number,
+  vote: "hot" | "cold",
+): { votes: PersonVote[]; hotVotes: number; coldVotes: number } | null {
+  const count = Math.max(0, Math.round(occupancy));
+  if (index < 0 || index >= count) {
+    return null;
+  }
+  const next = [
+    ...(activePersonVotes(occupancy, hotVotes, coldVotes, votes) ??
+      votesFromCounts(occupancy, hotVotes, coldVotes)),
+  ];
+  next[index] = next[index] === vote ? "none" : vote;
+  let hot = 0;
+  let cold = 0;
+  for (const item of next) {
+    if (item === "hot") {
+      hot += 1;
+    } else if (item === "cold") {
+      cold += 1;
+    }
+  }
+  return { votes: next, hotVotes: hot, coldVotes: cold };
 }
 
 function clamp(value: number, min: number, max: number): number {

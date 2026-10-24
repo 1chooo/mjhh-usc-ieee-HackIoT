@@ -5,7 +5,7 @@ import type { ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Scenario } from "../../lib/thermal";
 import { cold, hot, ink, person } from "./colors";
-import { peopleLayout, voteAt } from "./layout";
+import { peopleLayout, voteAt, type PersonVote } from "./layout";
 import type { SimPick } from "./sim-types";
 
 const voteColor = {
@@ -16,12 +16,14 @@ const voteColor = {
 
 export function People({
   scenario,
+  votes,
   width,
   depth,
   selected,
   onSelect,
 }: {
   scenario: Scenario;
+  votes: PersonVote[] | null;
   width: number;
   depth: number;
   selected: SimPick | null;
@@ -49,7 +51,8 @@ export function People({
       return;
     }
     layout.spots.forEach(([x, z], index) => {
-      const vote = voteAt(index, scenario.hotVotes, scenario.coldVotes);
+      const vote =
+        votes?.[index] ?? voteAt(index, scenario.hotVotes, scenario.coldVotes);
       color.set(voteColor[vote]);
       dummy.rotation.set(0, 0, 0);
       dummy.scale.setScalar(layout.scale);
@@ -72,7 +75,7 @@ export function People({
     if (heads.instanceColor) {
       heads.instanceColor.needsUpdate = true;
     }
-  }, [color, dummy, layout, scenario.coldVotes, scenario.hotVotes]);
+  }, [color, dummy, layout, scenario.coldVotes, scenario.hotVotes, votes]);
 
   if (layout.spots.length === 0) {
     return null;

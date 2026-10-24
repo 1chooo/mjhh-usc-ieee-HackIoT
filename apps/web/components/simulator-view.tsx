@@ -9,6 +9,12 @@ import {
   scenarioFrom,
 } from "../lib/campus";
 import { evaluate, type Scenario, type SpaceKind } from "../lib/thermal";
+import {
+  activePersonVotes,
+  castPersonVote,
+  voteAt,
+  type PersonVote,
+} from "./sim/layout";
 import { useCampus } from "../lib/use-campus";
 import { ResultBlock } from "./result-block";
 import { DetailCard } from "./sim/detail-card";
@@ -39,6 +45,7 @@ export function SimulatorView() {
   const [presetId, setPresetId] = useState<string | null>(opening.id);
   const [playLabel, setPlayLabel] = useState<PlayLabel>("play");
   const [progress, setProgress] = useState(0);
+  const [personVotes, setPersonVotes] = useState<PersonVote[] | null>(null);
   const applied = useRef(false);
   const scenarioRef = useRef(scenario);
   const storyRef = useRef<StoryClock | null>(null);
@@ -46,6 +53,8 @@ export function SimulatorView() {
   const playingRef = useRef(false);
   const loopRef = useRef(0);
   const showRef = useRef<(next: Scenario) => void>(() => {});
+  const personVotesRef = useRef(personVotes);
+  personVotesRef.current = personVotes;
 
   showRef.current = (next: Scenario) => {
     const settled = settle(next);
@@ -231,6 +240,29 @@ export function SimulatorView() {
     beginStory(end);
   }
 
+  function votePerson(index: number, vote: "hot" | "cold") {
+    const current = scenarioRef.current;
+    const cast = castPersonVote(
+      current.occupancy,
+      current.hotVotes,
+      current.coldVotes,
+      personVotesRef.current,
+      index,
+      vote,
+    );
+    if (!cast) {
+      return;
+    }
+    clearStory();
+    setPresetId(null);
+    setPersonVotes(cast.votes);
+    showRef.current({
+      ...scenarioRef.current,
+      hotVotes: cast.hotVotes,
+      coldVotes: cast.coldVotes,
+    });
+  }
+
   function patch(partial: Partial<Scenario>) {
     clearStory();
     setPresetId(null);
@@ -275,6 +307,17 @@ export function SimulatorView() {
     focusScenario(preset.scenario, preset.spaceId, preset.id);
   }
 
+  const shownVotes = activePersonVotes(
+    scenario.occupancy,
+    scenario.hotVotes,
+    scenario.coldVotes,
+    personVotes,
+  );
+  const personVote =
+    pick?.type === "person"
+      ? (shownVotes?.[pick.index] ??
+        voteAt(pick.index, scenario.hotVotes, scenario.coldVotes))
+      : null;
   const roomOnly = mode === "room";
   const playText =
     playLabel === "pause" ? "Pause" : playLabel === "replay" ? "Replay" : "Play";
@@ -287,6 +330,7 @@ export function SimulatorView() {
           scenario={scenario}
           result={result}
           readings={campus.readings}
+          votes={shownVotes}
           selected={pick}
           onSelect={setPick}
           onSelectSpace={openSpace}
@@ -391,6 +435,12 @@ export function SimulatorView() {
             <DetailCard
               pick={pick}
               scenario={scenario}
+              vote={personVote}
+              onVote={(vote) => {
+                if (pick?.type === "person") {
+                  votePerson(pick.index, vote);
+                }
+              }}
               onClose={() => setPick(null)}
             />
           ) : null}

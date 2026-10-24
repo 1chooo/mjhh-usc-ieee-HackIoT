@@ -3,7 +3,7 @@
 import type { Scenario, ThermalResult } from "../../lib/thermal";
 import { actionColor, floor, ink, outdoorTint, wall } from "./colors";
 import { FloatLabel } from "./float-label";
-import { furnish, roomFootprint } from "./layout";
+import { furnish, roomFootprint, type PersonVote } from "./layout";
 import { People } from "./people";
 import { bindPick } from "./pick";
 import type { SensorKind, SimPick } from "./sim-types";
@@ -11,11 +11,13 @@ import type { SensorKind, SimPick } from "./sim-types";
 export function Room({
   scenario,
   result,
+  votes,
   selected,
   onSelect,
 }: {
   scenario: Scenario;
   result: ThermalResult;
+  votes: PersonVote[] | null;
   selected: SimPick | null;
   onSelect: (pick: SimPick | null) => void;
 }) {
@@ -44,6 +46,7 @@ export function Room({
       ))}
       <People
         scenario={scenario}
+        votes={votes}
         width={width}
         depth={depth}
         selected={selected}

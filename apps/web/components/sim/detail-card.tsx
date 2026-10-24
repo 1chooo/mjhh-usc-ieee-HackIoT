@@ -1,7 +1,7 @@
 "use client";
 
 import type { Scenario } from "../../lib/thermal";
-import { voteAt } from "./layout";
+import type { PersonVote } from "./layout";
 import type { SensorKind, SimPick } from "./sim-types";
 
 const sensorName: Record<SensorKind, string> = {
@@ -14,16 +14,24 @@ const sensorName: Record<SensorKind, string> = {
 export function DetailCard({
   pick,
   scenario,
+  vote,
+  onVote,
   onClose,
 }: {
   pick: SimPick;
   scenario: Scenario;
+  vote: PersonVote | null;
+  onVote: (vote: "hot" | "cold") => void;
   onClose: () => void;
 }) {
   return (
     <aside className="sim-detail card">
       {pick.type === "person" ? (
-        <PersonDetail index={pick.index} scenario={scenario} />
+        <PersonDetail
+          vote={vote ?? "none"}
+          watts={scenario.wattsPerPerson}
+          onVote={onVote}
+        />
       ) : (
         <SensorDetail sensor={pick.sensor} scenario={scenario} />
       )}
@@ -35,13 +43,14 @@ export function DetailCard({
 }
 
 function PersonDetail({
-  index,
-  scenario,
+  vote,
+  watts,
+  onVote,
 }: {
-  index: number;
-  scenario: Scenario;
+  vote: PersonVote;
+  watts: number;
+  onVote: (vote: "hot" | "cold") => void;
 }) {
-  const vote = voteAt(index, scenario.hotVotes, scenario.coldVotes);
   const label =
     vote === "hot" ? "Too hot" : vote === "cold" ? "Too cold" : "No vote";
   return (
@@ -49,7 +58,25 @@ function PersonDetail({
       <p className={vote === "hot" ? "badge heat" : vote === "cold" ? "badge cool" : "badge"}>
         {label}
       </p>
-      <p className="sim-reading">{Math.round(scenario.wattsPerPerson)} W</p>
+      <div className="vote-row">
+        <button
+          type="button"
+          className="vote hot"
+          aria-pressed={vote === "hot"}
+          onClick={() => onVote("hot")}
+        >
+          Too hot
+        </button>
+        <button
+          type="button"
+          className="vote cold"
+          aria-pressed={vote === "cold"}
+          onClick={() => onVote("cold")}
+        >
+          Too cold
+        </button>
+      </div>
+      <p className="sim-reading">{Math.round(watts)} W</p>
     </>
   );
 }

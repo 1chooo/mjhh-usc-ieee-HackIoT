@@ -15,6 +15,7 @@ export function SimCanvas({
   scenario,
   result,
   readings,
+  votes,
   selected,
   onSelect,
   onSelectSpace,
@@ -77,6 +78,7 @@ export function SimCanvas({
         <Room
           scenario={scenario}
           result={result}
+          votes={votes}
           selected={selected}
           onSelect={onSelect}
         />
