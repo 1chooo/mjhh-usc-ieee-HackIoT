@@ -1,8 +1,4 @@
-import {
-  energyDeltaLabel,
-  savingsCopy,
-  type ThermalResult,
-} from "../lib/thermal";
+import { energyDeltaLabel, type ThermalResult } from "../lib/thermal";
 
 export function ResultBlock({ result }: { result: ThermalResult }) {
   const savedClass =
@@ -11,26 +7,24 @@ export function ResultBlock({ result }: { result: ThermalResult }) {
   return (
     <div className="result">
       <p className={`badge ${result.action}`}>{result.action}</p>
-      <p className="summary">{result.summary}</p>
       <dl className="stat-grid">
         <div>
-          <dt>Perceived</dt>
+          <dt>Feels like</dt>
           <dd>{result.perceivedC.toFixed(1)}°C</dd>
         </div>
         <div>
-          <dt>Policy setpoint</dt>
+          <dt>Setpoint</dt>
           <dd>{result.targetC.toFixed(1)}°C</dd>
         </div>
         <div>
-          <dt>Fixed setpoint</dt>
+          <dt>Fixed</dt>
           <dd>{result.baselineSetpointC.toFixed(1)}°C</dd>
         </div>
         <div>
-          <dt>This comparison</dt>
+          <dt>Difference</dt>
           <dd className={savedClass}>{energyDeltaLabel(result.savedKwh)}</dd>
         </div>
       </dl>
-      <p>{savingsCopy(result)}</p>
       <EnergyCompare
         baselineKwh={result.baselineKwh}
         adaptiveKwh={result.adaptiveKwh}

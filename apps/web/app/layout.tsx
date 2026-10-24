@@ -1,15 +1,25 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { SiteHeader } from "../components/site-header";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
+const instrumentSans = Instrument_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-instrument",
 });
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-instrument-serif",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
 });
 
 export const metadata: Metadata = {
@@ -28,16 +38,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body
+        className={`${instrumentSans.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
+      >
         <SiteHeader />
-        <main id="content" className="wrap">
+        <main id="content" className="shell">
           {children}
         </main>
         <footer className="colophon">
-          <p className="colophon-inner">
-            Simulated rooms for MJHH · USC IEEE HackIoT. This is not a live HVAC
-            controller.
-          </p>
+          <p className="colophon-inner">Not a live HVAC controller.</p>
         </footer>
       </body>
     </html>
