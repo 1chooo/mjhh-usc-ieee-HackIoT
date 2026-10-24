@@ -1,5 +1,21 @@
-import { redirect } from "next/navigation";
-import { getSpace } from "../../../lib/campus";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { RoomDetail } from "../../../components/console/room-detail";
+import {
+  defaultReadings,
+  evaluateSpace,
+  getSpace,
+} from "../../../lib/campus";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ spaceId: string }>;
+}): Promise<Metadata> {
+  const { spaceId } = await params;
+  const space = getSpace(spaceId);
+  return { title: space?.name ?? "Room" };
+}
 
 export default async function RoomPage({
   params,
@@ -7,8 +23,17 @@ export default async function RoomPage({
   params: Promise<{ spaceId: string }>;
 }) {
   const { spaceId } = await params;
-  if (!getSpace(spaceId)) {
-    redirect("/dashboard");
+  const space = getSpace(spaceId);
+  const reading = space ? defaultReadings[space.id] : undefined;
+  if (!space || !reading) {
+    notFound();
   }
-  redirect(`/dashboard?room=${spaceId}`);
+
+  return (
+    <RoomDetail
+      mode="public"
+      room={{ space, reading, result: evaluateSpace(space, reading) }}
+      ready
+    />
+  );
 }
