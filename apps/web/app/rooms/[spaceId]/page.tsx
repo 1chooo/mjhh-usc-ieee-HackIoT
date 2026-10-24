@@ -1,32 +1,5 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { VotePanel } from "../../../components/vote-panel";
+import { redirect } from "next/navigation";
 import { getSpace } from "../../../lib/campus";
-
-export function generateStaticParams() {
-  return [
-    { spaceId: "leavey-reading" },
-    { spaceId: "doheny-2" },
-    { spaceId: "thh-201" },
-    { spaceId: "sal-127" },
-  ];
-}
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ spaceId: string }>;
-}): Promise<Metadata> {
-  const { spaceId } = await params;
-  const space = getSpace(spaceId);
-  if (!space) {
-    return { title: "Room" };
-  }
-  return {
-    title: space.name,
-    description: `Say whether ${space.building} ${space.name} feels hot or cold.`,
-  };
-}
 
 export default async function RoomPage({
   params,
@@ -35,7 +8,7 @@ export default async function RoomPage({
 }) {
   const { spaceId } = await params;
   if (!getSpace(spaceId)) {
-    notFound();
+    redirect("/dashboard");
   }
-  return <VotePanel spaceId={spaceId} />;
+  redirect(`/dashboard?room=${spaceId}`);
 }
