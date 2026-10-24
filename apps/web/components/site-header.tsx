@@ -19,8 +19,7 @@ export function SiteHeader() {
       </a>
       <div className="topbar-inner">
         <Link className="brand" href="/">
-          <span>HackIoT</span>
-          <small>MJHH · USC IEEE</small>
+          HackIoT
         </Link>
         <nav aria-label="Primary">
           {links.map((link) => {
@@ -37,6 +36,9 @@ export function SiteHeader() {
             );
           })}
         </nav>
+        <Link className="button nav-cta" href="/rooms">
+          Vote
+        </Link>
       </div>
     </header>
   );
