@@ -1,3 +1,36 @@
+@layer legacy, theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@source "..";
+
+@theme inline {
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-background: var(--console-background);
+  --color-foreground: var(--console-foreground);
+  --color-card: var(--console-card);
+  --color-card-foreground: var(--console-card-foreground);
+  --color-popover: var(--console-card);
+  --color-popover-foreground: var(--console-card-foreground);
+  --color-primary: var(--console-primary);
+  --color-primary-foreground: var(--console-primary-foreground);
+  --color-secondary: var(--console-secondary);
+  --color-secondary-foreground: var(--console-secondary-foreground);
+  --color-muted: var(--console-muted);
+  --color-muted-foreground: var(--console-muted-foreground);
+  --color-accent: var(--console-accent);
+  --color-accent-foreground: var(--console-accent-foreground);
+  --color-destructive: var(--console-destructive);
+  --color-border: var(--console-border);
+  --color-input: var(--console-input);
+  --color-ring: var(--console-ring);
+  --color-chart-1: var(--console-chart-1);
+  --color-chart-2: var(--console-chart-2);
+  --color-chart-3: var(--console-chart-3);
+}
+
+@layer legacy {
 :root {
   --bg: oklch(0.985 0.002 90);
   --ink: oklch(0.12 0.01 60);
@@ -1345,5 +1378,35 @@ legend {
   .vote {
     animation: none;
     transition: none;
+  }
+}
+
+}
+
+:root {
+  --console-background: var(--bg);
+  --console-foreground: var(--ink);
+  --console-card: var(--card);
+  --console-card-foreground: var(--ink);
+  --console-primary: var(--ink);
+  --console-primary-foreground: var(--bg);
+  --console-secondary: color-mix(in oklch, var(--ink) 6%, var(--card));
+  --console-secondary-foreground: var(--ink);
+  --console-muted: color-mix(in oklch, var(--ink) 4%, var(--card));
+  --console-muted-foreground: var(--muted);
+  --console-accent: color-mix(in oklch, var(--ink) 8%, var(--card));
+  --console-accent-foreground: var(--ink);
+  --console-destructive: var(--spend);
+  --console-border: var(--line);
+  --console-input: var(--line-strong);
+  --console-ring: var(--ink);
+  --console-chart-1: var(--cold);
+  --console-chart-2: var(--save);
+  --console-chart-3: var(--hot);
+}
+
+@layer legacy {
+  .split .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
