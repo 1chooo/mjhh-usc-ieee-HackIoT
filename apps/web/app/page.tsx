@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HomeResults } from "../components/home-results";
 import { spaces } from "../lib/campus";
 
 const factors = [
@@ -24,17 +25,19 @@ export default function Home() {
           </span>
         </h1>
         <div className="cta-row">
-          <Link className="button" href="/dashboard">
-            Dashboard
+          <Link className="button" href="/rooms">
+            Rooms
             <span className="arrow" aria-hidden="true">
               →
             </span>
           </Link>
-          <Link className="button secondary" href="/simulator">
-            Simulator
+          <Link className="button secondary" href="/impact">
+            Impact
           </Link>
         </div>
       </section>
+
+      <HomeResults />
 
       <section className="section">
         <h2>What the hour considers</h2>
@@ -50,7 +53,7 @@ export default function Home() {
         <ul className="room-index">
           {spaces.map((space) => (
             <li key={space.id}>
-              <Link href={`/dashboard?room=${space.id}`}>
+              <Link href={`/rooms/${space.id}`}>
                 <strong>{space.name}</strong>
                 <span className="meta">{space.building}</span>
               </Link>
