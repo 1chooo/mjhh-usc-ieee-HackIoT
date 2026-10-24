@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hackiot.local/schemas/device-telemetry.json",
+  "title": "DeviceTelemetry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["deviceId", "ts", "metrics"],
+  "properties": {
+    "deviceId": { "type": "string", "minLength": 1 },
+    "ts": { "type": "string", "format": "date-time" },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hackiot.local/schemas/device-command.json",
+  "title": "DeviceCommand",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["deviceId", "action"],
+  "properties": {
+    "deviceId": { "type": "string", "minLength": 1 },
+    "action": { "enum": ["on", "off", "set"] },
+    "value": { "type": "number" }
+  }
+}
