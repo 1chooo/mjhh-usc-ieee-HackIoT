@@ -48,7 +48,7 @@ export function EnergyCompare({
         <span className="bar">
           <span style={{ width: `${(baselineKwh / max) * 100}%` }} />
         </span>
-        <strong>{baselineKwh.toFixed(2)}</strong>
+        <strong>{baselineKwh.toFixed(2)} kWh</strong>
       </div>
       <div>
         <span>Policy</span>
@@ -58,7 +58,7 @@ export function EnergyCompare({
             style={{ width: `${(adaptiveKwh / max) * 100}%` }}
           />
         </span>
-        <strong>{adaptiveKwh.toFixed(2)}</strong>
+        <strong>{adaptiveKwh.toFixed(2)} kWh</strong>
       </div>
     </div>
   );

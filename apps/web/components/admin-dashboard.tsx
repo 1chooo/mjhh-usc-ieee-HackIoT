@@ -7,18 +7,29 @@ import { getSpace, spaces } from "../lib/campus";
 import {
   deltaTone,
   filterRooms,
-  searchRooms,
   summarizeCampus,
   type ActionFilter,
   type KindFilter,
 } from "../lib/campus-summary";
 import { energyDeltaLabel } from "../lib/thermal";
 import { useCampus } from "../lib/use-campus";
-import { RoomAlerts } from "./console/room-alerts";
+import { MetricRooms } from "./console/metric-rooms";
 import { RoomDetail } from "./console/room-detail";
-import { RoomFilters } from "./console/room-filters";
-import { RoomStream } from "./console/room-stream";
 import { StatGrid } from "./console/stat-grid";
+import { EnergyCompare } from "./result-block";
+
+const kinds: { id: KindFilter; label: string }[] = [
+  { id: "all", label: "All rooms" },
+  { id: "library", label: "Library" },
+  { id: "classroom", label: "Classroom" },
+];
+
+const actions: { id: ActionFilter; label: string }[] = [
+  { id: "all", label: "All calls" },
+  { id: "cool", label: "Cool" },
+  { id: "heat", label: "Heat" },
+  { id: "hold", label: "Hold" },
+];
 
 export function AdminDashboard() {
   const campus = useCampus();
@@ -29,12 +40,10 @@ export function AdminDashboard() {
   const summary = summarizeCampus(campus.readings);
   const [kind, setKind] = useState<KindFilter>("all");
   const [action, setAction] = useState<ActionFilter>("all");
-  const [query, setQuery] = useState("");
-  const [dismissed, setDismissed] = useState<string[]>([]);
-  const rooms = searchRooms(filterRooms(summary.rooms, kind, action), query);
-  const alerts = summary.alerts.filter((alert) => !dismissed.includes(alert.id));
+  const rooms = filterRooms(summary.rooms, kind, action);
   const selected = summary.rooms.find((room) => room.space.id === selectedSpace?.id);
   const tone = deltaTone(summary.savedKwh);
+  const filtered = kind !== "all" || action !== "all";
 
   function openRoom(spaceId: string) {
     router.replace(`/dashboard?room=${spaceId}`);
@@ -74,16 +83,13 @@ export function AdminDashboard() {
 
   return (
     <div className="stack">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="page-tools">
         <h1>Dashboard</h1>
         <div className="choice-row">
           <button
             className="ghost"
             type="button"
-            onClick={() => {
-              setDismissed([]);
-              campus.reset();
-            }}
+            onClick={() => campus.reset()}
             disabled={!campus.ready}
           >
             Reset
@@ -101,45 +107,67 @@ export function AdminDashboard() {
           </Link>
         </div>
       </div>
-      <StatGrid
-        items={[
-          {
-            label: "This hour",
-            value: energyDeltaLabel(summary.savedKwh),
-            tone: tone === "even" ? undefined : tone,
-          },
-          { label: "Rooms", value: String(summary.roomCount) },
-          { label: "Votes", value: String(Object.keys(campus.myVotes).length) },
-          {
-            label: "Calls",
-            value: `${summary.cool} cool · ${summary.heat} heat · ${summary.hold} hold`,
-          },
-        ]}
-      />
-      <RoomFilters
-        kind={kind}
-        action={action}
-        onKind={setKind}
-        onAction={setAction}
-        onClear={() => {
-          setKind("all");
-          setAction("all");
-        }}
-      />
-      <RoomAlerts
-        alerts={alerts}
-        onDismiss={(id) =>
-          setDismissed((current) =>
-            current.includes(id) ? current : [...current, id],
-          )
-        }
-      />
-      <div className="split">
-        <RoomStream
+      <div className="metric-summary">
+        <StatGrid
+          items={[
+            {
+              label: "This hour",
+              value: energyDeltaLabel(summary.savedKwh),
+              tone: tone === "even" ? undefined : tone,
+            },
+            { label: "Rooms", value: String(summary.roomCount) },
+            { label: "People", value: String(Math.round(summary.openPeople)) },
+            {
+              label: "Calls",
+              value: `${summary.cool} cool · ${summary.heat} heat · ${summary.hold} hold`,
+            },
+          ]}
+        />
+        <EnergyCompare
+          baselineKwh={summary.baselineKwh}
+          adaptiveKwh={summary.adaptiveKwh}
+        />
+      </div>
+      <div className="choice-row">
+        {kinds.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="ghost"
+            aria-pressed={kind === item.id}
+            onClick={() => setKind(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+        <span className="choice-gap" aria-hidden="true" />
+        {actions.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="ghost"
+            aria-pressed={action === item.id}
+            onClick={() => setAction(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+        {filtered ? (
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => {
+              setKind("all");
+              setAction("all");
+            }}
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <div className="admin-split">
+        <MetricRooms
           rooms={rooms}
-          query={query}
-          onQuery={setQuery}
-          variant="energy"
           selectedId={selected.space.id}
           onSelect={openRoom}
         />

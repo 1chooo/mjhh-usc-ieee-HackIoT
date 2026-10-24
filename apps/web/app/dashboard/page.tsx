@@ -5,7 +5,7 @@ import { AdminDashboard } from "../../components/admin-dashboard";
 export const metadata: Metadata = {
   title: "Dashboard",
   description:
-    "Admin view for each room: sensors, hot or cold votes, and the hour against a fixed setpoint.",
+    "Admin view of this hour: energy against a fixed setpoint, people, calls, and each room.",
 };
 
 export default function DashboardPage() {
