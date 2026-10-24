@@ -6,7 +6,7 @@ Monorepo for device control: a Next.js dashboard, a local hardware gateway, ESP3
 
 ```
 ├── apps/
-│   ├── web/              # Next.js web application for device control
+│   ├── web/              # Next.js app for room votes, the dashboard, and the simulator
 │   └── device-gateway/   # Node.js server that talks to local hardware ports
 ├── packages/
 │   ├── firmware/         # C++/PlatformIO code for Arduino/ESP32
@@ -43,6 +43,8 @@ pnpm --filter device-gateway dev
 ```
 
 `web` listens on port 3000. `device-gateway` listens on port 4000.
+
+The web demo has a landing page, an in-room hot/cold vote (`/rooms`), a dashboard, and a simulator for the temperature factors. Readings and votes stay in the browser.
 
 ## Firmware and training
 
