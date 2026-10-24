@@ -51,8 +51,8 @@ export default function RootLayout({
             <nav className="colophon-links" aria-label="Footer">
               <Link href="/rooms">Rooms</Link>
               <Link href="/impact">Impact</Link>
-              <Link href="/dashboard">Dashboard</Link>
               <Link href="/simulator">Simulator</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </nav>
             <p>Not a live HVAC controller.</p>
           </div>

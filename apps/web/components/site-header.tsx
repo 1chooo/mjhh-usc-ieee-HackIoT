@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 const links = [
   { href: "/rooms", label: "Rooms" },
   { href: "/impact", label: "Impact" },
-  { href: "/dashboard", label: "Dashboard" },
   { href: "/simulator", label: "Simulator" },
+  { href: "/dashboard", label: "Dashboard" },
 ];
 
 export function SiteHeader() {
