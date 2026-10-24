@@ -36,3 +36,19 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Python
+__pycache__/
+.venv/
+venv/
+*.py[cod]
+
+# PlatformIO
+.pio/
+
+# YOLO datasets, runs, and checkpoints
+*.pt
+*.onnx
+*.engine
+packages/yolo/datasets/
+packages/yolo/runs/
