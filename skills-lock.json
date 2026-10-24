@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "1chooo-balanced-context": {
+      "source": "1chooo/skills",
+      "sourceType": "github",
+      "skillPath": "agent-workflow/1chooo-balanced-context/SKILL.md",
+      "computedHash": "4c3d2a380f47d20cf2fe51aad90f5257f4bc3f759e1082bd1b7ce462dcf86ff8"
+    },
+    "1chooo-commits": {
+      "source": "1chooo/skills",
+      "sourceType": "github",
+      "skillPath": "dev-habits/1chooo-commits/SKILL.md",
+      "computedHash": "5bfdf284fcc711478b4775276d7db7efecec37b6182055b5d037dd9c05c22b90"
+    }
+  }
+}
