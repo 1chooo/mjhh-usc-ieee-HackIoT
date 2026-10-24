@@ -1054,6 +1054,7 @@ legend {
   display: block;
   height: 100%;
   background: color-mix(in oklch, var(--ink) 35%, transparent);
+  transition: width 0.35s ease;
 }
 
 .bar span.policy {
@@ -1246,19 +1247,6 @@ legend {
     width: calc(100% - 8.5rem);
   }
 
-  .sim-drawer {
-    top: 10.5rem;
-    right: 12px;
-    bottom: 12px;
-    left: 12px;
-    width: auto;
-  }
-
-  .sim-detail {
-    right: 12px;
-    width: auto;
-  }
-
   .hero h1 span {
     white-space: normal;
   }
@@ -1371,16 +1359,74 @@ body:has(.sim-shell) .colophon {
   width: calc(100% - 9rem);
 }
 
-.sim-top .preset-row {
-  flex: 1 1 100%;
-  flex-wrap: nowrap;
-  max-width: 100%;
-  overflow-x: auto;
-  padding-bottom: 4px;
+.sim-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 
-.sim-top .preset-row .ghost {
-  flex: none;
+.sim-play {
+  position: relative;
+  min-width: 7.5rem;
+  overflow: hidden;
+}
+
+.sim-play-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in oklch, var(--ink) 14%, transparent);
+}
+
+.sim-play[aria-pressed="true"] .sim-play-fill {
+  background: color-mix(in oklch, var(--bg) 28%, transparent);
+}
+
+.sim-play-label {
+  position: relative;
+}
+
+.sim-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 14px 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--card) 92%, transparent);
+  color: var(--muted);
+  backdrop-filter: blur(12px);
+}
+
+.sim-select:focus-within {
+  border-color: var(--ink);
+}
+
+.sim-select select {
+  max-width: 12rem;
+  border: 0;
+  padding-right: 1.1rem;
+  background-color: transparent;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position:
+    calc(100% - 8px) 55%,
+    calc(100% - 3px) 55%;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  appearance: none;
+}
+
+.sim-select select:focus {
+  outline: none;
 }
 
 .sim-top > * {
@@ -1410,7 +1456,7 @@ body:has(.sim-shell) .colophon {
   position: absolute;
   top: 10.75rem;
   right: 16px;
-  bottom: 16px;
+  bottom: 15.5rem;
   z-index: 2;
   width: min(380px, calc(100% - 32px));
   display: flex;
@@ -1425,8 +1471,76 @@ body:has(.sim-shell) .colophon {
   backdrop-filter: blur(16px);
 }
 
-.sim-drawer .result-card {
+.sim-dock {
+  position: absolute;
+  z-index: 3;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.sim-dock .sim-detail {
   position: static;
+  align-self: start;
+  width: min(320px, 100%);
+  pointer-events: auto;
+}
+
+.sim-metrics {
+  width: min(720px, 100%);
+  pointer-events: none;
+}
+
+.sim-metrics .result-card {
+  position: static;
+  gap: 10px;
+  padding: 12px 14px;
+  background: color-mix(in oklch, var(--card) 94%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+
+.sim-metrics .result {
+  gap: 10px;
+}
+
+.sim-metrics .stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sim-metrics .stat-grid div {
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.sim-metrics dd {
+  font-size: 1.15rem;
+}
+
+@media (max-width: 800px) {
+  .sim-drawer {
+    top: 10.5rem;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    z-index: 4;
+    width: auto;
+  }
+
+  .sim-dock {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .sim-metrics .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .sim-detail {
@@ -1462,7 +1576,8 @@ body:has(.sim-shell) .colophon {
   .site-nav-bar,
   .button,
   .ghost,
-  .vote {
+  .vote,
+  .bar span {
     animation: none;
     transition: none;
   }

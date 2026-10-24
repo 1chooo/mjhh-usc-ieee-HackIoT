@@ -147,26 +147,31 @@ export function evaluateSpace(space: Space, reading: Reading): ThermalResult {
 export const simulatorPresets: {
   id: string;
   label: string;
+  spaceId: string;
   scenario: Scenario;
 }[] = [
   {
     id: "warm-reading-room",
     label: "Warm reading room",
+    spaceId: "leavey-reading",
     scenario: scenarioFrom(spaces[0]!, defaultReadings["leavey-reading"]!),
   },
   {
     id: "overcooled-lecture",
     label: "Overcooled lecture",
+    spaceId: "thh-201",
     scenario: scenarioFrom(spaces[2]!, defaultReadings["thh-201"]!),
   },
   {
     id: "empty-classroom",
     label: "Empty classroom",
+    spaceId: "sal-127",
     scenario: scenarioFrom(spaces[3]!, defaultReadings["sal-127"]!),
   },
   {
     id: "humid-stacks",
     label: "Humid stacks",
+    spaceId: "doheny-2",
     scenario: {
       ...scenarioFrom(spaces[1]!, defaultReadings["doheny-2"]!),
       humidityPct: 72,

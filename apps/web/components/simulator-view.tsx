@@ -14,17 +14,44 @@ import { ResultBlock } from "./result-block";
 import { DetailCard } from "./sim/detail-card";
 import { SimStage } from "./sim/sim-stage";
 import type { SimMode, SimPick } from "./sim/sim-types";
+import {
+  EASE_MS,
+  lerpScenario,
+  sampleStory,
+  STORY_MS,
+} from "./sim/story";
+
+type PlayLabel = "play" | "pause" | "replay";
+
+type StoryClock = { end: Scenario; elapsed: number };
+type EaseClock = { from: Scenario; to: Scenario; elapsed: number };
+
+const opening = simulatorPresets[0]!;
 
 export function SimulatorView() {
   const params = useSearchParams();
   const campus = useCampus();
-  const [scenario, setScenario] = useState<Scenario>(
-    simulatorPresets[0]!.scenario,
-  );
+  const [scenario, setScenario] = useState<Scenario>(opening.scenario);
   const [mode, setMode] = useState<SimMode>("room");
   const [pick, setPick] = useState<SimPick | null>(null);
   const [factorsOpen, setFactorsOpen] = useState(true);
+  const [spaceId, setSpaceId] = useState(opening.spaceId);
+  const [presetId, setPresetId] = useState<string | null>(opening.id);
+  const [playLabel, setPlayLabel] = useState<PlayLabel>("play");
+  const [progress, setProgress] = useState(0);
   const applied = useRef(false);
+  const scenarioRef = useRef(scenario);
+  const storyRef = useRef<StoryClock | null>(null);
+  const easeRef = useRef<EaseClock | null>(null);
+  const playingRef = useRef(false);
+  const loopRef = useRef(0);
+  const showRef = useRef<(next: Scenario) => void>(() => {});
+
+  showRef.current = (next: Scenario) => {
+    const settled = settle(next);
+    scenarioRef.current = settled;
+    setScenario(settled);
+  };
 
   useEffect(() => {
     if (window.matchMedia("(max-width: 800px)").matches) {
@@ -37,15 +64,24 @@ export function SimulatorView() {
       return;
     }
     applied.current = true;
-    const spaceId = params.get("space");
-    if (!spaceId) {
+    const id = params.get("space");
+    if (!id) {
       return;
     }
-    const space = getSpace(spaceId);
-    const reading = campus.readings[spaceId];
-    if (space && reading) {
-      setScenario(scenarioFrom(space, reading));
+    const space = getSpace(id);
+    const reading = campus.readings[id];
+    if (!space || !reading) {
+      return;
     }
+    const next = settle(scenarioFrom(space, reading));
+    storyRef.current = null;
+    easeRef.current = null;
+    playingRef.current = false;
+    setPlayLabel("play");
+    setProgress(0);
+    setSpaceId(id);
+    setPresetId(presetFor(next, id));
+    showRef.current(next);
   }, [campus.ready, campus.readings, params]);
 
   useEffect(() => {
@@ -54,31 +90,194 @@ export function SimulatorView() {
     }
   }, [pick, scenario.occupancy]);
 
+  useEffect(() => {
+    return () => {
+      if (loopRef.current) {
+        cancelAnimationFrame(loopRef.current);
+      }
+    };
+  }, []);
+
   const result = evaluate(scenario);
 
-  function patch(partial: Partial<Scenario>) {
-    setScenario((current) => settle({ ...current, ...partial }));
+  function stopLoop() {
+    if (loopRef.current) {
+      cancelAnimationFrame(loopRef.current);
+      loopRef.current = 0;
+    }
   }
 
-  function loadScenario(next: Scenario) {
-    setScenario(settle(next));
+  function ensureLoop() {
+    if (loopRef.current) {
+      return;
+    }
+    let last = performance.now();
+    const step = (now: number) => {
+      const dt = Math.min(50, now - last);
+      last = now;
+      let keep = false;
+      const storyClock = storyRef.current;
+      if (playingRef.current && storyClock) {
+        storyClock.elapsed = Math.min(STORY_MS, storyClock.elapsed + dt);
+        const t = storyClock.elapsed / STORY_MS;
+        showRef.current({
+          ...storyClock.end,
+          ...sampleStory(storyClock.end, t),
+        });
+        setProgress(t);
+        if (t >= 1) {
+          playingRef.current = false;
+          setPlayLabel("replay");
+        } else {
+          keep = true;
+        }
+      } else if (easeRef.current) {
+        const clock = easeRef.current;
+        clock.elapsed = Math.min(EASE_MS, clock.elapsed + dt);
+        const t = clock.elapsed / EASE_MS;
+        if (t >= 1) {
+          easeRef.current = null;
+          showRef.current(clock.to);
+        } else {
+          showRef.current(lerpScenario(clock.from, clock.to, t));
+          keep = true;
+        }
+      }
+      loopRef.current = keep ? requestAnimationFrame(step) : 0;
+    };
+    loopRef.current = requestAnimationFrame(step);
+  }
+
+  function clearStory() {
+    storyRef.current = null;
+    easeRef.current = null;
+    playingRef.current = false;
+    setPlayLabel("play");
+    setProgress(0);
+    stopLoop();
+  }
+
+  function easeTo(next: Scenario) {
+    const target = settle(next);
+    storyRef.current = null;
+    playingRef.current = false;
+    setPlayLabel("play");
+    setProgress(0);
+    stopLoop();
+    if (motionReduced()) {
+      easeRef.current = null;
+      showRef.current(target);
+      return;
+    }
+    const from: Scenario = {
+      ...scenarioRef.current,
+      kind: target.kind,
+      scheduledOpen: target.scheduledOpen,
+    };
+    easeRef.current = { from, to: target, elapsed: 0 };
+    showRef.current(from);
+    ensureLoop();
+  }
+
+  function pausePlayback() {
+    playingRef.current = false;
+    const elapsed = storyRef.current?.elapsed ?? 0;
+    setPlayLabel(elapsed >= STORY_MS ? "replay" : "play");
+    if (!easeRef.current) {
+      stopLoop();
+    }
+  }
+
+  function beginStory(end: Scenario) {
+    const target = settle(end);
+    easeRef.current = null;
+    storyRef.current = { end: target, elapsed: 0 };
+    playingRef.current = true;
+    setPlayLabel("pause");
+    setProgress(0);
+    stopLoop();
+    showRef.current({ ...target, ...sampleStory(target, 0) });
+    ensureLoop();
+  }
+
+  function onPlay() {
+    if (mode !== "room") {
+      return;
+    }
+    if (playingRef.current) {
+      pausePlayback();
+      return;
+    }
+    if (motionReduced()) {
+      const target = easeRef.current?.to ?? storyRef.current?.end;
+      if (target) {
+        clearStory();
+        showRef.current(target);
+      }
+      return;
+    }
+    const storyClock = storyRef.current;
+    if (storyClock && storyClock.elapsed < STORY_MS && !easeRef.current) {
+      playingRef.current = true;
+      setPlayLabel("pause");
+      ensureLoop();
+      return;
+    }
+    const end =
+      easeRef.current?.to ??
+      (storyClock && storyClock.elapsed >= STORY_MS
+        ? storyClock.end
+        : scenarioRef.current);
+    beginStory(end);
+  }
+
+  function patch(partial: Partial<Scenario>) {
+    clearStory();
+    setPresetId(null);
+    showRef.current({ ...scenarioRef.current, ...partial });
+  }
+
+  function focusScenario(
+    next: Scenario,
+    nextSpaceId: string,
+    nextPresetId: string | null,
+  ) {
+    setSpaceId(nextSpaceId);
+    setPresetId(nextPresetId);
     setPick(null);
     setMode("room");
+    easeTo(next);
   }
 
   function showMode(next: SimMode) {
+    if (next === "campus") {
+      pausePlayback();
+    }
     setMode(next);
     setPick(null);
   }
 
-  function openSpace(spaceId: string) {
-    const space = getSpace(spaceId);
-    const reading = campus.readings[spaceId];
+  function openSpace(id: string) {
+    const space = getSpace(id);
+    const reading = campus.readings[id];
     if (!space || !reading) {
       return;
     }
-    loadScenario(scenarioFrom(space, reading));
+    const next = scenarioFrom(space, reading);
+    focusScenario(next, id, presetFor(next, id));
   }
+
+  function openPreset(id: string) {
+    const preset = simulatorPresets.find((item) => item.id === id);
+    if (!preset) {
+      return;
+    }
+    focusScenario(preset.scenario, preset.spaceId, preset.id);
+  }
+
+  const roomOnly = mode === "room";
+  const playText =
+    playLabel === "pause" ? "Pause" : playLabel === "replay" ? "Replay" : "Play";
 
   return (
     <section className="sim-shell" aria-label="Room simulator">
@@ -118,27 +317,65 @@ export function SimulatorView() {
               {result.action} · {result.targetC.toFixed(1)}°C
             </p>
           </div>
-          <div className="preset-row">
-            {simulatorPresets.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="ghost"
-                onClick={() => loadScenario(preset.scenario)}
+          <div className="sim-tags">
+            <button
+              type="button"
+              className="ghost sim-play"
+              aria-pressed={playLabel === "pause"}
+              disabled={!roomOnly}
+              onClick={onPlay}
+            >
+              <span
+                className="sim-play-fill"
+                style={{ width: `${progress * 100}%` }}
+                aria-hidden="true"
+              />
+              <span className="sim-play-label">{playText}</span>
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              aria-pressed={scenario.scheduledOpen}
+              disabled={!roomOnly}
+              onClick={() =>
+                patch({
+                  scheduledOpen: !scenarioRef.current.scheduledOpen,
+                })
+              }
+            >
+              {scenario.scheduledOpen ? "Open" : "Closed"}
+            </button>
+            <label className="sim-select">
+              <span>Room</span>
+              <select
+                value={spaceId}
+                onChange={(event) => openSpace(event.target.value)}
               >
-                {preset.label}
-              </button>
-            ))}
-            {spaces.map((space) => (
-              <button
-                key={space.id}
-                type="button"
-                className="ghost"
-                onClick={() => openSpace(space.id)}
+                {spaces.map((space) => (
+                  <option key={space.id} value={space.id}>
+                    {space.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="sim-select">
+              <span>Scenario</span>
+              <select
+                value={presetId ?? ""}
+                onChange={(event) => openPreset(event.target.value)}
               >
-                {space.name}
-              </button>
-            ))}
+                {presetId ? null : (
+                  <option value="" disabled>
+                    Custom
+                  </option>
+                )}
+                {simulatorPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
         <button
@@ -149,13 +386,20 @@ export function SimulatorView() {
         >
           {factorsOpen ? "Hide factors" : "Factors"}
         </button>
-        {pick ? (
-          <DetailCard
-            pick={pick}
-            scenario={scenario}
-            onClose={() => setPick(null)}
-          />
-        ) : null}
+        <div className="sim-dock">
+          {pick ? (
+            <DetailCard
+              pick={pick}
+              scenario={scenario}
+              onClose={() => setPick(null)}
+            />
+          ) : null}
+          <div className="sim-metrics">
+            <div className="result-card">
+              <ResultBlock result={result} />
+            </div>
+          </div>
+        </div>
         {factorsOpen ? (
           <aside className="sim-drawer" aria-label="Scenario factors">
             <fieldset>
@@ -224,18 +468,6 @@ export function SimulatorView() {
             </fieldset>
             <fieldset>
               <legend>People</legend>
-              <div className="choice-row">
-                <button
-                  type="button"
-                  className="ghost"
-                  aria-pressed={scenario.scheduledOpen}
-                  onClick={() =>
-                    patch({ scheduledOpen: !scenario.scheduledOpen })
-                  }
-                >
-                  {scenario.scheduledOpen ? "Room is open" : "Room is closed"}
-                </button>
-              </div>
               <Slider
                 label="Occupancy"
                 min={0}
@@ -312,13 +544,26 @@ export function SimulatorView() {
                 onChange={(hours) => patch({ hours })}
               />
             </fieldset>
-            <div className="result-card">
-              <ResultBlock result={result} />
-            </div>
           </aside>
         ) : null}
       </div>
     </section>
+  );
+}
+
+function motionReduced(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function sameScenario(a: Scenario, b: Scenario): boolean {
+  return (Object.keys(a) as (keyof Scenario)[]).every((key) => a[key] === b[key]);
+}
+
+function presetFor(next: Scenario, id: string): string | null {
+  return (
+    simulatorPresets.find(
+      (preset) => preset.spaceId === id && sameScenario(preset.scenario, next),
+    )?.id ?? null
   );
 }
 
@@ -352,7 +597,16 @@ function Slider({
   value: number;
   onChange: (value: number) => void;
 }) {
-  const shown = step >= 1 ? String(Math.round(value)) : value.toFixed(1);
+  const places = step >= 1 ? 0 : 1;
+  const capped = Math.min(max, Math.max(min, value));
+  let stepped = Number((Math.round(capped / step) * step).toFixed(places));
+  if (stepped > max) {
+    stepped = Number((stepped - step).toFixed(places));
+  }
+  if (stepped < min) {
+    stepped = Number(Math.max(min, stepped).toFixed(places));
+  }
+  const shown = places === 0 ? String(stepped) : stepped.toFixed(1);
   return (
     <label className="slider">
       <span>
@@ -366,7 +620,7 @@ function Slider({
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={stepped}
         aria-valuetext={`${shown} ${unit}`}
         onChange={(event) => onChange(Number(event.target.value))}
       />
