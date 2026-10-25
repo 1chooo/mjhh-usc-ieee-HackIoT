@@ -1,85 +1,115 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { getSpace, spaces } from "../lib/campus";
-import {
-  deltaTone,
-  filterRooms,
-  summarizeCampus,
-  type ActionFilter,
-  type KindFilter,
-} from "../lib/campus-summary";
-import { energyDeltaLabel } from "../lib/thermal";
-import { useCampus } from "../lib/use-campus";
-import { MetricRooms } from "./console/metric-rooms";
-import { RoomDetail } from "./console/room-detail";
+import { useEffect, useState } from "react";
+import { loadRoom, type RoomLive, type RoomRecord } from "../lib/supabase-rest";
 import { StatGrid } from "./console/stat-grid";
-import { EnergyCompare } from "./result-block";
+import { VoteMeter } from "./result-block";
 
-const kinds: { id: KindFilter; label: string }[] = [
-  { id: "all", label: "All rooms" },
-  { id: "library", label: "Library" },
-  { id: "classroom", label: "Classroom" },
-];
+function formatUsd(value: number): string {
+  const amount = Math.abs(value).toLocaleString("en-US", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  });
+  return value < 0 ? `-$${amount}` : `$${amount}`;
+}
 
-const actions: { id: ActionFilter; label: string }[] = [
-  { id: "all", label: "All calls" },
-  { id: "cool", label: "Cool" },
-  { id: "heat", label: "Heat" },
-  { id: "hold", label: "Hold" },
-];
+function formatTemp(tempC: number | null): string {
+  return tempC == null ? "No reading" : `${tempC.toFixed(1)}°C`;
+}
+
+function formatWhen(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function exportRoom(room: RoomLive) {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    record: room.record,
+    history: room.history,
+    hot: room.hot,
+    cold: room.cold,
+    setpoint: room.setpoint,
+    savings: room.savings,
+    totalUsd: room.totalUsd,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `room-${Date.now()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function RecentRecords({ records }: { records: RoomRecord[] }) {
+  if (records.length === 0) {
+    return <p className="note">No readings yet.</p>;
+  }
+
+  return (
+    <div className="bills">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Time</th>
+            <th scope="col">People</th>
+            <th scope="col">Temperature</th>
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((row) => (
+            <tr key={row.id}>
+              <th scope="row">{formatWhen(row.created_at)}</th>
+              <td>{row.ppl}</td>
+              <td>{formatTemp(row.temp_c)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export function AdminDashboard() {
-  const campus = useCampus();
-  const router = useRouter();
-  const params = useSearchParams();
-  const requested = params.get("room");
-  const selectedSpace = getSpace(requested ?? "") ?? spaces[0];
-  const summary = summarizeCampus(campus.readings);
-  const [kind, setKind] = useState<KindFilter>("all");
-  const [action, setAction] = useState<ActionFilter>("all");
-  const rooms = filterRooms(summary.rooms, kind, action);
-  const selected = summary.rooms.find((room) => room.space.id === selectedSpace?.id);
-  const tone = deltaTone(summary.savedKwh);
-  const filtered = kind !== "all" || action !== "all";
+  const [room, setRoom] = useState<RoomLive | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function openRoom(spaceId: string) {
-    router.replace(`/dashboard?room=${spaceId}`);
-  }
+  useEffect(() => {
+    let cancelled = false;
 
-  function exportReadings() {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      rooms: summary.rooms.map((room) => ({
-        id: room.space.id,
-        name: room.space.name,
-        building: room.space.building,
-        kind: room.space.kind,
-        reading: room.reading,
-        action: room.result.action,
-        baselineKwh: room.result.baselineKwh,
-        adaptiveKwh: room.result.adaptiveKwh,
-        savedKwh: room.result.savedKwh,
-        targetC: room.result.targetC,
-        baselineSetpointC: room.result.baselineSetpointC,
-      })),
+    async function refresh() {
+      try {
+        const next = await loadRoom();
+        if (!cancelled) {
+          setRoom(next);
+          setError(null);
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      }
+    }
+
+    void refresh();
+    const timer = setInterval(() => void refresh(), 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `campus-energy-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
+  }, []);
 
-  if (!selected) {
-    return null;
-  }
+  const latestSaving = room?.savings[room.savings.length - 1];
+  const latestUsd = latestSaving ? Number(latestSaving.saved_usd) : Number.NaN;
+  const savedTone =
+    room == null || room.totalUsd === 0 ? undefined : room.totalUsd > 0 ? "save" : "spend";
 
   return (
     <div className="stack">
@@ -89,98 +119,55 @@ export function AdminDashboard() {
           <button
             className="ghost"
             type="button"
-            onClick={() => campus.reset()}
-            disabled={!campus.ready}
-          >
-            Reset
-          </button>
-          <button
-            className="ghost"
-            type="button"
-            onClick={exportReadings}
-            disabled={!campus.ready}
+            onClick={() => {
+              if (room) exportRoom(room);
+            }}
+            disabled={!room}
           >
             Export
           </button>
-          <Link className="ghost" href={`/simulator?space=${selected.space.id}`}>
-            Simulator
-          </Link>
         </div>
       </div>
-      <div className="metric-summary">
-        <StatGrid
-          items={[
-            {
-              label: "This hour",
-              value: energyDeltaLabel(summary.savedKwh),
-              tone: tone === "even" ? undefined : tone,
-            },
-            { label: "Rooms", value: String(summary.roomCount) },
-            { label: "People", value: String(Math.round(summary.openPeople)) },
-            {
-              label: "Calls",
-              value: `${summary.cool} cool · ${summary.heat} heat · ${summary.hold} hold`,
-            },
-          ]}
-        />
-        <EnergyCompare
-          baselineKwh={summary.baselineKwh}
-          adaptiveKwh={summary.adaptiveKwh}
-        />
-      </div>
-      <div className="choice-row">
-        {kinds.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="ghost"
-            aria-pressed={kind === item.id}
-            onClick={() => setKind(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-        <span className="choice-gap" aria-hidden="true" />
-        {actions.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="ghost"
-            aria-pressed={action === item.id}
-            onClick={() => setAction(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-        {filtered ? (
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              setKind("all");
-              setAction("all");
-            }}
-          >
-            Clear
-          </button>
-        ) : null}
-      </div>
-      <div className="admin-split">
-        <MetricRooms
-          rooms={rooms}
-          selectedId={selected.space.id}
-          onSelect={openRoom}
-        />
-        <RoomDetail
-          room={selected}
-          mode="admin"
-          myVote={campus.myVotes[selected.space.id]}
-          ready={campus.ready}
-          onToggleOpen={(open) => campus.setRoomOpen(selected.space.id, open)}
-          onVote={(vote) => campus.castVote(selected.space.id, vote)}
-          onClearVote={() => campus.clearVote(selected.space.id)}
-        />
-      </div>
+      {room == null && error == null ? <p className="note">Loading the room…</p> : null}
+      {error ? (
+        <p className="note" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {room ? (
+        <>
+          <StatGrid
+            items={[
+              {
+                label: "Temperature",
+                value: room.record ? formatTemp(room.record.temp_c) : "No reading",
+              },
+              {
+                label: "People",
+                value: room.record ? String(room.record.ppl) : "—",
+              },
+              {
+                label: "Setpoint",
+                value: room.setpoint ? `${room.setpoint.target_c.toFixed(1)}°C` : "No target",
+              },
+              {
+                label: "Saved",
+                value: formatUsd(room.totalUsd),
+                tone: savedTone,
+              },
+            ]}
+          />
+          <p className="note">
+            {Number.isFinite(latestUsd)
+              ? `Latest cycle ${formatUsd(latestUsd)}`
+              : "No savings yet."}
+            {room.record ? ` · Reading ${formatWhen(room.record.created_at)}` : ""}
+          </p>
+          <VoteMeter hot={room.hot} cold={room.cold} />
+          <h2>Recent readings</h2>
+          <RecentRecords records={room.history} />
+        </>
+      ) : null}
     </div>
   );
 }
