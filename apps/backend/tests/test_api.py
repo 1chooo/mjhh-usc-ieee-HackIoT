@@ -18,7 +18,6 @@ import os
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import quote
@@ -74,13 +73,18 @@ def expect(name, res, status, code=None):
     return body
 
 
+def track(table, res):
+    """Remember the ids of rows a request created, even one that was expected to fail."""
+    status, body = res
+    if status == 201 and isinstance(body, list):
+        created[table] += [row["id"] for row in body]
+    return res
+
+
 def add(name, client, table, row):
     """Insert one row that should succeed, and remember its id for cleanup."""
-    body = expect(name, client("POST", f"/{table}", row), 201)
-    if isinstance(body, list) and body:
-        created[table].append(body[0]["id"])
-        return body[0]
-    return {}
+    body = expect(name, track(table, client("POST", f"/{table}", row)), 201)
+    return body[0] if isinstance(body, list) and body else {}
 
 
 def latest(pub, table):
@@ -92,19 +96,31 @@ def run(pub, sec):
     print("removed")
     for name in ("room_now", "occupancy_reading", "temp_reading"):
         expect(f"{name} is gone", pub("GET", f"/{name}"), 404, "PGRST205")
+    for column in ("hot_count", "cold_count"):
+        res = track("record", sec("POST", "/record", {"ppl": 1, column: 1}))
+        expect(f"record has no {column} column", res, 400, "PGRST204")
 
-    print("\nvote inbox")
-    since = quote(latest(pub, "record").get("created_at") or "1970-01-01T00:00:00Z")  # '+00:00' must not become a space
-    before = expect("publishable key reads votes since the last record", pub("GET", f"/vote?created_at=gt.{since}&select=id"), 200)
+    print("\none Pi cycle")
+    first = add("secret key saves a record without a temperature", sec, "record", {"ppl": 5, "temp_c": None})
+    check("it has only id, ppl, temp_c and created_at, with temp_c null", set(first) == {"id", "ppl", "temp_c", "created_at"} and first["temp_c"] is None, first)
     add("publishable key casts a hot vote", pub, "vote", {"is_hot": True})
     add("publishable key casts a cold vote", pub, "vote", {"is_hot": False})
-    after = expect("publishable key reads votes again", pub("GET", f"/vote?created_at=gt.{since}&select=id,is_hot"), 200)
-    new = [v for v in after or [] if v["id"] in created["vote"]]
-    check(
-        "the window since the last record holds both new votes",
-        len(after or []) - len(before or []) == 2 and sorted(v["is_hot"] for v in new) == [False, True],
-        after,
+    first_at = quote(first.get("created_at", "1970-01-01T00:00:00Z"))  # '+00:00' must not become a space
+    rows = expect("publishable key reads the votes since that record", pub("GET", f"/vote?created_at=gt.{first_at}&select=id"), 200)
+    check("they're exactly the two new votes", sorted(v["id"] for v in rows or []) == sorted(created["vote"]), rows)
+    second = add("secret key saves the next record", sec, "record", {"ppl": 7, "temp_c": 23.5})
+    row = latest(pub, "record")
+    check("publishable key reads it as the latest record", row.get("id") == second.get("id") and row.get("ppl") == 7 and row.get("temp_c") == Decimal("23.5"), row)
+    second_at = quote(second.get("created_at", "1970-01-01T00:00:00Z"))
+    rows = expect(
+        "publishable key reads the votes between the two records",
+        pub("GET", f"/vote?created_at=gt.{first_at}&created_at=lte.{second_at}&select=is_hot"),
+        200,
     )
+    hot = sum(1 for v in rows or [] if v["is_hot"])
+    check("that cycle counted hot 1 / cold 1", (hot, len(rows or []) - hot) == (1, 1), rows)
+
+    print("\nvote rules")
     expect(
         "publishable key can't backdate a vote",
         pub("POST", "/vote", {"is_hot": True, "created_at": "2020-01-01T00:00:00Z"}),
@@ -117,15 +133,9 @@ def run(pub, sec):
     expect("publishable key can't delete a vote", pub("DELETE", f"/vote?id=eq.{vote_id}"), 401, "42501")
     expect("secret key changes a vote", sec("PATCH", f"/vote?id=eq.{vote_id}", {"is_hot": False}), 204)
 
-    print("\nrecord")
+    print("\nrecord rules")
     expect("publishable key can't add a record", pub("POST", "/record", {"ppl": 1}), 401, "42501")
-    no_temp = add("secret key adds a record without a temperature", sec, "record", {"ppl": 5, "temp_c": None})
-    check("temp_c is null and the vote counts default to 0", no_temp.get("temp_c") is None and no_temp.get("hot_count") == 0 and no_temp.get("cold_count") == 0, no_temp)
-    full = add("secret key adds a full record", sec, "record", {"ppl": 7, "temp_c": 23.5, "hot_count": 2, "cold_count": 1})
-    row = latest(pub, "record")
-    check("publishable key reads it as the latest record", row.get("id") == full.get("id") and row.get("ppl") == 7, row)
-    check("with temp 23.5, hot 2, cold 1", row.get("temp_c") == Decimal("23.5") and row.get("hot_count") == 2 and row.get("cold_count") == 1, row)
-    record_id = full.get("id", 0)
+    record_id = second.get("id", 0)
     expect("publishable key can't change a record", pub("PATCH", f"/record?id=eq.{record_id}", {"ppl": 0}), 401, "42501")
     expect("publishable key can't delete a record", pub("DELETE", f"/record?id=eq.{record_id}"), 401, "42501")
     expect("secret key fixes a record", sec("PATCH", f"/record?id=eq.{record_id}", {"ppl": 8}), 204)
@@ -147,12 +157,11 @@ def run(pub, sec):
     check("they add up to exactly $0.0625", total == Decimal("0.0625"), rows)
 
     print("\nconstraints")
-    expect("negative people count is rejected", sec("POST", "/record", {"ppl": -1}), 400, "23514")
-    expect("negative hot count is rejected", sec("POST", "/record", {"ppl": 1, "hot_count": -1}), 400, "23514")
-    expect("temperature of 200 °C is rejected", sec("POST", "/record", {"ppl": 1, "temp_c": 200}), 400, "23514")
-    expect("record without ppl is rejected", sec("POST", "/record", {"temp_c": 22}), 400, "23502")
-    expect("target outside 16–30 °C is rejected", sec("POST", "/setpoint", {"target_c": 35}), 400, "23514")
-    expect("saving without saved_usd is rejected", sec("POST", "/saving", {}), 400, "23502")
+    expect("negative people count is rejected", track("record", sec("POST", "/record", {"ppl": -1})), 400, "23514")
+    expect("temperature of 200 °C is rejected", track("record", sec("POST", "/record", {"ppl": 1, "temp_c": 200})), 400, "23514")
+    expect("record without ppl is rejected", track("record", sec("POST", "/record", {"temp_c": 22})), 400, "23502")
+    expect("target outside 16–30 °C is rejected", track("setpoint", sec("POST", "/setpoint", {"target_c": 35})), 400, "23514")
+    expect("saving without saved_usd is rejected", track("saving", sec("POST", "/saving", {})), 400, "23502")
 
 
 def cleanup(pub, sec):
