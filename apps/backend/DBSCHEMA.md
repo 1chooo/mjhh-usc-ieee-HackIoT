@@ -1,19 +1,22 @@
 # Database Schema
 
-Four tables and one view in Supabase (Postgres). Sensors and the vote page insert rows. Everyone reads the current state of each room from the `room_now` view.
+Five tables and one view in Supabase (Postgres). Sensors, the vote page, and the AC model insert rows. Everyone reads the current state of each room from the `room_now` view.
 
 ```
 YOLO camera    ──insert──▶ occupancy_reading ─┐
-ESP32 gateway  ──insert──▶ temp_reading      ─┼─▶ room_now (view) ──▶ dashboard, algorithm
-Vote page      ──insert──▶ vote              ─┘
+ESP32 gateway  ──insert──▶ temp_reading      ─┤
+Vote page      ──insert──▶ vote              ─┼─▶ room_now (view) ──▶ dashboard
+AC model (Pi)  ──insert──▶ setpoint          ─┘
                            every row points at a room
 ```
+
+New `setpoint` rows also go out over Realtime, so the gateway can send each target to the AC as soon as the model saves it.
 
 ## Tables
 
 ### `room`
 
-One row per room, rarely changes. Starts empty: add rooms with the secret key (see [API.md](API.md#room)).
+One row per room, rarely changes. Add rooms with the secret key (see [API.md](API.md#room)), or run `python3 apps/backend/scripts/seed.py` to add the four rooms the web app simulates, with two hours of sample history ending at the web app's default readings.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -53,7 +56,18 @@ One row per temperature reading from an ESP32.
 | `temp_c` | `real` not null, between −40 and 85 | °C. The range matches common ESP32 sensors and rejects garbage readings. |
 | `created_at` | `timestamptz` not null, default `now()` | |
 
-Each of the three reading tables has one index on `(room_id, created_at desc)` that also includes its value column. "Latest reading for a room" and "votes in the last 10 minutes" are then answered from the index alone, without touching the table.
+### `setpoint`
+
+One row per AC target temperature predicted by the model in `apps/alg`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `bigint` identity primary key | |
+| `room_id` | `text` not null → `room.id` | |
+| `target_c` | `real` not null, between 16 and 30 | °C. Same range the model clamps its output to (`SET_MIN`, `SET_MAX` in `acmodel.py`). |
+| `created_at` | `timestamptz` not null, default `now()` | When the model made the prediction |
+
+Each table that points at a room has one index on `(room_id, created_at desc)` that also includes its value column. "Latest reading for a room" and "votes in the last 10 minutes" are then answered from the index alone, without touching the table.
 
 ## View: `room_now`
 
@@ -65,15 +79,16 @@ One row per room with everything current. This is the main thing the frontend re
 | `ppl`, `ppl_at` | Latest people count and when it was taken |
 | `temp_c`, `temp_at` | Latest temperature and when it was taken |
 | `hot_count`, `cold_count` | Votes in the last 10 minutes (0 if none) |
+| `target_c`, `target_at` | Latest model target and when it was predicted |
 
-`ppl` and `temp_c` are `null` until the first reading arrives.
+`ppl`, `temp_c`, and `target_c` are `null` until the first row arrives.
 
 ## Who can read and write
 
 | Who | Key | Reads | Writes |
 | --- | --- | --- | --- |
 | Vote page, dashboard (browser) | publishable key | everything | `vote` only, and only `room_id` and `is_hot` |
-| YOLO script, device-gateway | secret key | everything | everything |
+| YOLO script, device-gateway, AC model | secret key | everything | everything |
 
 Row Level Security is on for every table. The secret key bypasses it, so it must never go into browser code or a `NEXT_PUBLIC_*` variable.
 
@@ -96,13 +111,12 @@ Every table keeps a plain `id`. Using `(room_id, created_at)` as the key would s
 ## Open questions
 
 1. **Charts.** If the dashboard needs history, it can query the reading tables directly for short windows. The API returns at most 1,000 rows per request, and at one YOLO reading every 5 seconds that's about 80 minutes. Longer charts need a small SQL function that returns one row per minute.
-2. **Setpoint.** The AC setpoint isn't stored. If the dashboard should show it, or show why the algorithm picked it, add a `setpoint` table.
-3. **Vote spam.** Anyone with the page open can vote as often as they like. If that matters for the demo, add anonymous sign-in, a `user_id` column, and a one-vote-per-minute rule.
-4. **Vote window.** Votes count for 10 minutes. Change the interval in `room_now` to tune it.
+2. **Vote spam.** Anyone with the page open can vote as often as they like. If that matters for the demo, add anonymous sign-in, a `user_id` column, and a one-vote-per-minute rule.
+3. **Vote window.** Votes count for 10 minutes. Change the interval in `room_now` to tune it.
 
 ## SQL and changing the schema
 
-The schema lives in [`supabase/migrations/20261024204729_init_schema.sql`](supabase/migrations/20261024204729_init_schema.sql), and that migration is applied to the hosted project. Change the schema only through new migration files, never by editing tables in the Dashboard, so git stays the source of truth:
+The schema lives in [`supabase/migrations/`](supabase/migrations/), one file per change, and every migration there is applied to the hosted project. Change the schema only through new migration files, never by editing tables in the Dashboard, so git stays the source of truth:
 
 ```sh
 cd apps/backend

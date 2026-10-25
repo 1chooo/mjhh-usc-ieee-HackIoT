@@ -78,8 +78,12 @@ def run(pub, sec, room):
     rows = expect("publishable key reads room_now", pub("GET", f"/room_now{only_room}"), 200)
     row = rows[0] if rows else {}
     check(
-        "no readings and no votes yet",
-        row.get("ppl") is None and row.get("temp_c") is None and row.get("hot_count") == 0 and row.get("cold_count") == 0,
+        "no readings, votes or target yet",
+        row.get("ppl") is None
+        and row.get("temp_c") is None
+        and row.get("target_c") is None
+        and row.get("hot_count") == 0
+        and row.get("cold_count") == 0,
         row,
     )
 
@@ -116,9 +120,17 @@ def run(pub, sec, room):
     rows = expect("publishable key reads temperature history", pub("GET", f"/temp_reading{only_room}&order=created_at.asc"), 200)
     check("1 temperature reading", isinstance(rows, list) and len(rows) == 1, rows)
 
+    print("\nsetpoint")
+    expect("publishable key can't add a target", pub("POST", "/setpoint", {"room_id": room, "target_c": 22}), 401, "42501")
+    expect("secret key adds a target", sec("POST", "/setpoint", {"room_id": room, "target_c": 22.5}), 201)
+    expect("secret key adds a newer target", sec("POST", "/setpoint", {"room_id": room, "target_c": 23}), 201)
+    rows = expect("publishable key reads the latest target", pub("GET", f"/setpoint{only_room}&order=created_at.desc&limit=1"), 200)
+    check("latest target is 23", bool(rows) and rows[0]["target_c"] == 23, rows)
+
     print("\nconstraints")
     expect("negative people count is rejected", sec("POST", "/occupancy_reading", {"room_id": room, "ppl": -1}), 400, "23514")
     expect("temperature of 200 °C is rejected", sec("POST", "/temp_reading", {"room_id": room, "temp_c": 200}), 400, "23514")
+    expect("target outside 16–30 °C is rejected", sec("POST", "/setpoint", {"room_id": room, "target_c": 35}), 400, "23514")
     expect("room id with uppercase and '/' is rejected", sec("POST", "/room", {"id": "Bad/Id", "name": "x"}), 400, "23514")
     expect("duplicate room id is rejected", sec("POST", "/room", {"id": room, "name": "again"}), 409, "23505")
 
@@ -127,6 +139,7 @@ def run(pub, sec, room):
     row = rows[0] if rows else {}
     check("shows the latest people count (7)", row.get("ppl") == 7, row)
     check("shows the latest temperature (23.5)", row.get("temp_c") == 23.5, row)
+    check("shows the latest target (23)", row.get("target_c") == 23, row)
     check("counts 1 hot + 1 cold, ignoring the 11-minute-old vote", row.get("hot_count") == 1 and row.get("cold_count") == 1, row)
 
     print("\nroom update / delete")
@@ -137,7 +150,7 @@ def run(pub, sec, room):
 
 def cleanup(pub, sec, room):
     print("\ncleanup")
-    for table in ("vote", "occupancy_reading", "temp_reading"):
+    for table in ("vote", "occupancy_reading", "temp_reading", "setpoint"):
         expect(f"secret key deletes test rows from {table}", sec("DELETE", f"/{table}?room_id=eq.{room}"), 204)
     expect("secret key deletes the test room", sec("DELETE", f"/room?id=eq.{room}"), 204)
     rows = expect("publishable key confirms it's gone", pub("GET", f"/room?id=eq.{room}"), 200)

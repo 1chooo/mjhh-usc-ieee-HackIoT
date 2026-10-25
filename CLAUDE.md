@@ -34,6 +34,7 @@ pip install -r requirements.txt
 python train.py --data /path/to/data.yaml [--model yolo11n.pt --epochs 50 --imgsz 640]
 
 cd apps/backend && supabase migration new <name>   # then: supabase link --project-ref avcqkyfobsalzdzzgvqm && supabase db push
+python3 apps/backend/scripts/seed.py [--reset]     # the web app's 4 rooms + 2 h of sample data (needs SUPABASE_SECRET_KEY)
 ```
 
 ## Architecture
@@ -53,7 +54,7 @@ Topics are `hackiot/devices/{deviceId}/command` and `hackiot/devices/{deviceId}/
 
 **Current command flow:** `POST /commands` → `parseCommand` → resolve the topic from `topics.json` → log it → `202 { accepted, topic, ports }`. There's no MQTT client or broker yet, and no serial port is opened. `HARDWARE_PORTS` (comma-separated, e.g. `/dev/cu.usbserial-0001`) is only parsed and echoed back. `GET /health` returns the configured ports. The intended design is that the gateway owns the local hardware ports, falling back to a Python adapter when a device library is Python-only.
 
-**backend** (`apps/backend`) is a Supabase project with no server code, outside pnpm and turbo. The schema (`room`, `vote`, `occupancy_reading`, `temp_reading`, and the `room_now` view) is in `supabase/migrations/` and is applied to the hosted project `avcqkyfobsalzdzzgvqm`. `DBSCHEMA.md` explains the tables, and `API.md` lists the auto-generated REST endpoints and which key (publishable or secret) can call each one. `room.id` is the same string as the MQTT `deviceId`. This project's default privileges grant `anon` and `authenticated` everything on new `public` tables, so every migration must `revoke all` before granting.
+**backend** (`apps/backend`) is a Supabase project with no server code, outside pnpm and turbo. The schema (`room`, `vote`, `occupancy_reading`, `temp_reading`, `setpoint` for the AC model's predicted targets, and the `room_now` view) is in `supabase/migrations/` and is applied to the hosted project `avcqkyfobsalzdzzgvqm`. `DBSCHEMA.md` explains the tables, and `API.md` lists the auto-generated REST endpoints and which key (publishable or secret) can call each one. `room.id` is the same string as the MQTT `deviceId`. This project's default privileges grant `anon` and `authenticated` everything on new `public` tables, so every migration must `revoke all` before granting.
 
 **web** is still the create-turbo starter page. It doesn't yet depend on `@repo/shared-types` or call the gateway; add `"@repo/shared-types": "workspace:*"` when wiring it up.
 
