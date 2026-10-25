@@ -1,0 +1,477 @@
+.simulator {
+  scroll-margin-top: 110px;
+}
+
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+}
+
+.heading h2 {
+  max-width: 22ch;
+}
+
+.heading a {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.presets button {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.presets button:hover {
+  background: var(--card);
+}
+
+.presets button[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.roomPanel {
+  padding: 28px 32px 32px;
+  border-right: 1px solid var(--line-strong);
+  background: color-mix(in oklch, var(--ink) 2%, var(--bg));
+}
+
+.roomReadings,
+.roomStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.roomStatus strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.diagram {
+  display: block;
+  width: 100%;
+  max-height: 225px;
+  margin: 12px 0 4px;
+}
+
+.roomWall,
+.window,
+.board {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.window {
+  stroke-width: 5;
+  stroke: var(--cold);
+}
+
+.board {
+  fill: var(--bg);
+  stroke-width: 1;
+}
+
+.door {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.desk {
+  fill: var(--bg);
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.person {
+  fill: var(--save);
+  transition: fill 180ms ease;
+}
+
+.emptySeat {
+  fill: color-mix(in oklch, var(--ink) 9%, var(--bg));
+}
+
+.schedule {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.schedule input {
+  accent-color: var(--save);
+  width: 17px;
+  height: 17px;
+  margin: 0;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 24px;
+  margin-top: 25px;
+}
+
+.range label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+}
+
+.range output {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.range input {
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--save);
+  cursor: pointer;
+}
+
+.range input:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.comparison {
+  padding: 28px 32px;
+  background: var(--card);
+  min-width: 0;
+}
+
+.policies {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.policy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 20px 16px;
+  background: color-mix(in oklch, var(--ink) 3%, var(--card));
+  border-radius: 4px;
+}
+
+.policy h3 {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.policy p {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.adaptive {
+  background: color-mix(in oklch, var(--save) 9%, var(--card));
+}
+
+.temperature {
+  font-size: clamp(2rem, 3.5vw, 3.5rem);
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.temperature span {
+  font-size: 0.5em;
+  letter-spacing: -0.02em;
+  padding-left: 3px;
+}
+
+.energy {
+  margin: 24px 0;
+}
+
+.energyHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+}
+
+.energyHeading h3 {
+  font-size: inherit;
+  font-weight: 500;
+}
+
+.energyHeading > span {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.barRow + .barRow {
+  margin-top: 12px;
+}
+
+.barRow > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.barRow strong {
+  color: var(--ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  height: 8px;
+  overflow: hidden;
+  background: color-mix(in oklch, var(--ink) 5%, var(--card));
+  border-radius: 2px;
+}
+
+.baselineBar,
+.adaptiveBar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 250ms ease;
+}
+
+.baselineBar {
+  background: var(--ink);
+}
+
+.adaptiveBar {
+  background: var(--save);
+}
+
+.outcomes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding-top: 21px;
+  border-top: 1px solid var(--line);
+}
+
+.outcomes dt {
+  margin-bottom: 9px;
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.outcomes dd {
+  font-size: clamp(1.2rem, 1.7vw, 1.7rem);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.outcomes dd span {
+  font-size: 0.65em;
+  letter-spacing: 0;
+}
+
+.saving {
+  color: var(--save);
+}
+
+.increase {
+  color: var(--spend);
+}
+
+.response {
+  min-height: 2.8em;
+  margin-top: 19px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+.assumptions {
+  color: var(--muted);
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 17px;
+}
+
+.assumptions summary {
+  width: fit-content;
+  cursor: pointer;
+  min-height: 28px;
+  color: var(--ink);
+}
+
+.assumptions p {
+  max-width: 95ch;
+  margin-top: 12px;
+  line-height: 1.6;
+}
+
+.assumptionInputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 16px 0 20px;
+  max-width: 850px;
+}
+
+.assumptionInputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.assumptionInputs input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--card);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .roomPanel,
+  .comparison {
+    padding: 24px;
+  }
+
+  .policies {
+    gap: 10px;
+  }
+
+  .policy {
+    padding: 14px;
+  }
+
+  .energyHeading {
+    flex-wrap: wrap;
+    gap: 3px 12px;
+  }
+
+  .outcomes {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 700px) {
+  .heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .roomPanel {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-strong);
+  }
+
+  .diagram {
+    max-height: 190px;
+    margin: 4px 0;
+  }
+
+  .controls {
+    margin-top: 16px;
+  }
+
+  .temperature {
+    font-size: 2.8rem;
+  }
+
+  .outcomes dd {
+    font-size: clamp(1.1rem, 4.7vw, 1.6rem);
+  }
+
+  .assumptionInputs {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 400px) {
+  .roomPanel,
+  .comparison {
+    padding: 20px 16px;
+  }
+
+  .roomReadings {
+    font-size: 0.78rem;
+  }
+
+  .presets button {
+    padding: 10px 14px;
+    font-size: 0.86rem;
+  }
+
+  .policy {
+    padding: 12px;
+  }
+
+  .policy p {
+    font-size: 0.73rem;
+  }
+
+  .outcomes dt {
+    font-size: 0.73rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presets button,
+  .person,
+  .baselineBar,
+  .adaptiveBar {
+    transition: none;
+  }
+}

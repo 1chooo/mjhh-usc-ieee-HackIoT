@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
-import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import {
+  Instrument_Sans,
+  Instrument_Serif,
+  JetBrains_Mono,
+} from "next/font/google";
 import Link from "next/link";
 import { SiteHeader } from "../components/site-header";
 import "./globals.css";
@@ -29,7 +33,7 @@ export const metadata: Metadata = {
     template: "%s · HackIoT",
   },
   description:
-    "Simulate library and classroom temperature, collect hot or cold votes, and compare the energy with a fixed setpoint.",
+    "Explore occupancy and comfort based heating and cooling. Compare estimated electricity, cost, and CO₂e with a fixed thermostat in an interactive room simulator.",
 };
 
 export default function RootLayout({
