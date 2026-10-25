@@ -10,7 +10,7 @@ import {
   type Vote,
 } from "./campus";
 
-const storageKey = "hackiot.comfort.v1";
+const storageKey = "mjhh.comfort.v1";
 
 function isReading(value: unknown): value is Reading {
   if (typeof value !== "object" || value === null) {

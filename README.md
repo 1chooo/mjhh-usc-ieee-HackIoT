@@ -1,6 +1,6 @@
-# MJHH—USC IEEE's HackIoT
+# MJHH
 
-Monorepo for device control: a Next.js dashboard, a local hardware gateway, ESP32/Arduino firmware, shared MQTT message specs, and an optional YOLO training workspace.
+USC IEEE monorepo for device control: a Next.js dashboard, a local hardware gateway, ESP32/Arduino firmware, shared MQTT message specs, and an optional YOLO training workspace.
 
 ## Layout
 

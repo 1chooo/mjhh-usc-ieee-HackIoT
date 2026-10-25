@@ -29,8 +29,8 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "HackIoT",
-    template: "%s · HackIoT",
+    default: "MJHH",
+    template: "%s · MJHH",
   },
   description:
     "Explore occupancy and comfort based heating and cooling. Compare estimated electricity, cost, and CO₂e with a fixed thermostat in an interactive room simulator.",

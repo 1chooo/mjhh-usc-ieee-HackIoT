@@ -2,7 +2,7 @@
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("hackiot firmware");
+  Serial.println("mjhh firmware");
 }
 
 void loop() { delay(1000); }

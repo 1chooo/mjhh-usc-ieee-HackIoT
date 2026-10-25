@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://hackiot.local/schemas/device-telemetry.json",
+  "$id": "https://mjhh.local/schemas/device-telemetry.json",
   "title": "DeviceTelemetry",
   "type": "object",
   "additionalProperties": false,

@@ -15,9 +15,9 @@ export type DeviceTelemetry = {
 };
 
 export function commandTopic(deviceId: string): string {
-  return `hackiot/devices/${deviceId}/command`;
+  return `mjhh/devices/${deviceId}/command`;
 }
 
 export function telemetryTopic(deviceId: string): string {
-  return `hackiot/devices/${deviceId}/telemetry`;
+  return `mjhh/devices/${deviceId}/telemetry`;
 }

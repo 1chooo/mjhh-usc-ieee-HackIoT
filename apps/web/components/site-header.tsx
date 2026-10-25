@@ -36,7 +36,7 @@ export function SiteHeader() {
       <div className={`site-nav${scrolled || open ? " is-panel" : ""}`}>
         <div className="site-nav-bar">
           <Link className="brand" href="/">
-            HackIoT
+            MJHH
           </Link>
           <nav className="site-links" aria-label="Primary">
             {links.map((link) => {

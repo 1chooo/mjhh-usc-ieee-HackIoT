@@ -28,7 +28,7 @@ export default function Home() {
         </h1>
         <p className="lede">
           An empty classroom and a full reading room need different responses.
-          HackIoT brings room conditions and people’s feedback into one model
+          MJHH brings room conditions and people’s feedback into one model
           for heating and cooling.
         </p>
         <div className="cta-row">

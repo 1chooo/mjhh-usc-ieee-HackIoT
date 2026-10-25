@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://hackiot.local/schemas/device-command.json",
+  "$id": "https://mjhh.local/schemas/device-command.json",
   "title": "DeviceCommand",
   "type": "object",
   "additionalProperties": false,

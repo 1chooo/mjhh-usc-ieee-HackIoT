@@ -1,4 +1,4 @@
-"""Train a YOLO model for HackIoT.
+"""Train a YOLO model for MJHH.
 
 Datasets, checkpoints, and run outputs stay on disk. See README.md.
 """
@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train a YOLO model for HackIoT")
+    parser = argparse.ArgumentParser(description="Train a YOLO model for MJHH")
     parser.add_argument("--data", type=Path, required=True, help="Path to a YOLO data.yaml")
     parser.add_argument("--model", default="yolo11n.pt", help="Base checkpoint name")
     parser.add_argument("--epochs", type=int, default=50)

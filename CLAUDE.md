@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-HackIoT monorepo (USC IEEE hackathon): a Next.js dashboard, a Node.js hardware gateway, a Supabase backend, ESP32 firmware, shared MQTT message specs, and an optional YOLO training workspace. Most of it is still scaffold: the pieces are laid out, but they don't talk to each other yet.
+MJHH monorepo (USC IEEE hackathon): a Next.js dashboard, a Node.js hardware gateway, a Supabase backend, ESP32 firmware, shared MQTT message specs, and an optional YOLO training workspace. Most of it is still scaffold: the pieces are laid out, but they don't talk to each other yet.
 
 ## Commands
 
@@ -50,7 +50,7 @@ python3 apps/backend/scripts/seed.py [--reset]     # 2 h of sample Pi cycles (ne
 3. `packages/shared-types/schemas/topics.json`: topic patterns with a `{deviceId}` placeholder. The gateway reads this file at runtime via `import.meta.resolve`, not through the TS helpers.
 4. `parseCommand()` in `apps/device-gateway/src/index.ts`: hand-written validation that mirrors `device-command.json` (there's no JSON Schema validator).
 
-Topics are `hackiot/devices/{deviceId}/command` and `hackiot/devices/{deviceId}/telemetry`.
+Topics are `mjhh/devices/{deviceId}/command` and `mjhh/devices/{deviceId}/telemetry`.
 
 **Current command flow:** `POST /commands` → `parseCommand` → resolve the topic from `topics.json` → log it → `202 { accepted, topic, ports }`. There's no MQTT client or broker yet, and no serial port is opened. `HARDWARE_PORTS` (comma-separated, e.g. `/dev/cu.usbserial-0001`) is only parsed and echoed back. `GET /health` returns the configured ports. The intended design is that the gateway owns the local hardware ports, falling back to a Python adapter when a device library is Python-only.
 

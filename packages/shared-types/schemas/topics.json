@@ -1,4 +1,4 @@
 {
-  "command": "hackiot/devices/{deviceId}/command",
-  "telemetry": "hackiot/devices/{deviceId}/telemetry"
+  "command": "mjhh/devices/{deviceId}/command",
+  "telemetry": "mjhh/devices/{deviceId}/telemetry"
 }
