@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Vote } from "../lib/campus";
+import { liveVotes, rest } from "../lib/supabase-rest";
 
 const sides: { vote: Vote; label: string; hint: string }[] = [
   { vote: "cold", label: "Cold", hint: "Too cold in here" },
@@ -47,33 +48,8 @@ function VoteIcon({ vote }: { vote: Vote }) {
   );
 }
 
-// Supabase REST, see apps/backend/API.md. The publishable key may only read and cast votes.
-const restUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1`;
-const headers = {
-  apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
-  "Content-Type": "application/json",
-};
-
-async function rest<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${restUrl}${path}`, { ...init, headers });
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-  const text = await res.text();
-  return (text ? JSON.parse(text) : null) as T;
-}
-
 async function submitVote(vote: Vote): Promise<void> {
   await rest("/vote", { method: "POST", body: JSON.stringify({ is_hot: vote === "hot" }) });
-}
-
-// Votes cast since the latest record: the count the Pi will use on its next cycle.
-async function fetchLiveCount(): Promise<{ hot: number; cold: number }> {
-  const last = await rest<{ created_at: string }[]>(
-    "/record?select=created_at&order=created_at.desc&limit=1",
-  );
-  const since = encodeURIComponent(last[0]?.created_at ?? "1970-01-01T00:00:00Z");
-  const votes = await rest<{ is_hot: boolean }[]>(`/vote?select=is_hot&created_at=gt.${since}`);
-  const hot = votes.filter((v) => v.is_hot).length;
-  return { hot, cold: votes.length - hot };
 }
 
 export function VoteView() {
@@ -84,7 +60,7 @@ export function VoteView() {
 
   async function refresh() {
     try {
-      setCount(await fetchLiveCount());
+      setCount(await liveVotes());
     } catch (e) {
       setError(String(e));
     }
