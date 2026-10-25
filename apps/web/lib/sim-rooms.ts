@@ -34,6 +34,13 @@ export const WEEK0 = "2026-11-02";
 const c = (id: string, name: string, days: number[], start: number, hours: number, people: number, prefersC: number): SimClass[] =>
   days.map((day) => ({ id: `${id}-${day}`, name, day, start, hours, people, prefersC }));
 
+/** One week of classes, listed in time order (Monday first). */
+const week = (...lists: SimClass[][]): SimClass[] => lists.flat().sort((a, b) => a.day - b.day || a.start - b.start);
+
+/*
+ * Back-to-back classes differ by at least a third in head count, so the model sees a new
+ * group walk in rather than the same one staying on.
+ */
 export const simRooms: SimRoom[] = [
   {
     id: "leavey-reading",
@@ -42,8 +49,13 @@ export const simRooms: SimRoom[] = [
     kind: "library",
     floorAreaM2: 640,
     capacity: 180,
-    note: "Two study blocks a day. Same room, different crowds: the model keeps a separate taste for each.",
-    classes: [...c("study-am", "Morning study", [0, 2], 9, 3, 70, 25), ...c("study-pm", "Afternoon study", [0, 2], 14, 3, 140, 24.5)],
+    note: "Study blocks all week. Same room, different crowds: the model keeps a separate taste for each.",
+    classes: week(
+      c("study-am", "Morning study", [0, 1, 2, 3, 4], 9, 3, 70, 25),
+      c("study-pm", "Afternoon study", [0, 1, 2, 3, 4], 14, 3, 140, 24.5),
+      c("study-eve", "Evening cram", [0, 1, 2, 3], 19, 3, 110, 23.5),
+      c("study-sat", "Weekend study", [5], 11, 4, 40, 25.5),
+    ),
   },
   {
     id: "doheny-2",
@@ -52,8 +64,12 @@ export const simRooms: SimRoom[] = [
     kind: "library",
     floorAreaM2: 420,
     capacity: 90,
-    note: "One long quiet block on Tuesday and Thursday. This group likes it warm, so the AC learns to work less.",
-    classes: c("stacks", "Quiet stacks", [1, 3], 10, 4, 45, 26),
+    note: "Quiet floor. The daytime groups like it warm, so the AC learns to work less.",
+    classes: week(
+      c("grad-reading", "Grad reading", [0, 2, 4], 9, 3, 30, 25),
+      c("stacks", "Quiet stacks", [1, 3], 10, 4, 45, 26),
+      c("stacks-eve", "Evening stacks", [0, 1, 2, 3], 18, 3, 60, 24.5),
+    ),
   },
   {
     id: "thh-201",
@@ -62,8 +78,16 @@ export const simRooms: SimRoom[] = [
     kind: "classroom",
     floorAreaM2: 140,
     capacity: 40,
-    note: "Two classes back to back with opposite tastes: the model has to tell them apart.",
-    classes: [...c("writ150", "WRIT 150", [0, 2], 9, 2, 36, 23), ...c("math125", "MATH 125", [0, 2], 11, 1, 22, 26)],
+    note: "A full teaching room. WRIT 150 and MATH 125 run back to back with opposite tastes: the model has to tell them apart.",
+    classes: week(
+      c("writ150", "WRIT 150", [0, 2], 9, 2, 36, 23),
+      c("math125", "MATH 125", [0, 2], 11, 1, 22, 26),
+      c("econ351", "ECON 351", [0, 2], 14, 2, 38, 22.5),
+      c("psyc100", "PSYC 100", [1, 3], 9, 2, 32, 24),
+      c("span120", "SPAN 120", [1, 3], 12, 2, 25, 24.5),
+      c("buad304", "BUAD 304", [1, 3], 16, 2, 40, 23.5),
+      c("ctwr101", "CTWR 101", [4], 10, 3, 18, 25.5),
+    ),
   },
   {
     id: "sal-127",
@@ -72,8 +96,14 @@ export const simRooms: SimRoom[] = [
     kind: "classroom",
     floorAreaM2: 110,
     capacity: 30,
-    note: "Evening section that likes it cold. The model gives them what they ask for, and that costs energy.",
-    classes: c("csci270", "CSCI 270", [1, 3], 18, 2, 26, 22),
+    note: "Computer lab. The evening CSCI 270 section likes it cold: the model gives them what they ask for, and that costs energy.",
+    classes: week(
+      c("csci104", "CSCI 104 lab", [0, 2], 10, 2, 28, 23.5),
+      c("ee109", "EE 109", [0, 2], 14, 2, 20, 24.5),
+      c("itp115", "ITP 115", [1, 3], 12, 2, 24, 24),
+      c("csci270", "CSCI 270", [1, 3], 18, 2, 26, 22),
+      c("hack-club", "Hack club", [4], 15, 3, 16, 23),
+    ),
   },
   {
     id: "sgm-124",
@@ -82,8 +112,14 @@ export const simRooms: SimRoom[] = [
     kind: "classroom",
     floorAreaM2: 420,
     capacity: 300,
-    note: "Large lecture hall. 260 people make a lot of heat, so the AC sits far below the room temperature and each degree saved is worth many kWh.",
-    classes: [...c("bisc120", "BISC 120", [0, 2], 10, 2, 260, 25), ...c("econ203", "ECON 203", [1, 3], 14, 2, 180, 24.5)],
+    note: "Large lecture hall. Hundreds of people make a lot of heat, so the AC sits far below the room temperature and each degree saved is worth many kWh.",
+    classes: week(
+      c("bisc120", "BISC 120", [0, 2], 10, 2, 260, 25),
+      c("chem105", "CHEM 105", [0, 2], 13, 2, 220, 24),
+      c("phys151", "PHYS 151", [1, 3], 10, 2, 150, 25.5),
+      c("econ203", "ECON 203", [1, 3], 14, 2, 180, 24.5),
+      c("gesm", "GESM forum", [4], 9, 2, 120, 24),
+    ),
   },
   {
     id: "kap-160",
@@ -92,8 +128,13 @@ export const simRooms: SimRoom[] = [
     kind: "classroom",
     floorAreaM2: 60,
     capacity: 20,
-    note: "Seminar room. Under 15 people is a drop-in hour with no group memory; 18 people is a group.",
-    classes: [...c("office", "Office hours", [1], 15, 2, 9, 24), ...c("seminar", "Grad seminar", [3], 11, 2, 18, 25.5)],
+    note: "Seminar room. Under 15 people is a drop-in hour with no group memory; 15 or more is a group.",
+    classes: week(
+      c("reading-group", "Reading group", [0, 2], 13, 2, 16, 24.5),
+      c("office", "Office hours", [1, 2], 15, 2, 9, 24),
+      c("seminar", "Grad seminar", [3], 11, 2, 18, 25.5),
+      c("thesis", "Thesis meeting", [4], 10, 2, 6, 23),
+    ),
   },
 ];
 
