@@ -84,6 +84,8 @@ def run_cycle(model: SimpleModel, timestamp: str | None = None):
     target = model.update(n, hot, cold, timestamp)
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] {n} people, {'n/a' if temp is None else f'{temp:.1f}'} C, hot {hot} / cold {cold} -> {target} C")
     print(set_ac(target))
+    # return data to the database {人數, current temperature}
+
 
 
 def run_preset(model: SimpleModel):
