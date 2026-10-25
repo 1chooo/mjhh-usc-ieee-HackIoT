@@ -90,7 +90,7 @@ export function ModelPanel({
             {result.closed ? "empty" : current ? (recognized ? `${gname(current.gid)} recognized` : gname(current.gid)) : "drop-in"}
           </span>
           <span className="model-sub">
-            {className} · learned {m.learnedHours - 1} h
+            {className} · learned {totals.hours} h
           </span>
         </div>
         <div className="model-actions">
