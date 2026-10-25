@@ -1,8 +1,14 @@
 import { RoomModel, type Decision } from "./ac-model";
 import { evaluate, type Factor, type HvacAction, type Scenario, type ThermalResult } from "./thermal";
 
-/** The comparison: an AC left at one setpoint all day. */
+/** Reference room temperature for the cooling-load estimate. */
 export const FIXED_SETPOINT_C = 24;
+
+/** The comparison: an AC left at 22°C all day, the way many campus rooms are run. */
+export const BASELINE_AC_C = 22;
+
+/** Where the AC sits while the room is empty. */
+export const SETBACK_C = 26;
 
 /**
  * How much warmer than the AC setpoint the room ends up with these people in it. Same premise
@@ -38,18 +44,50 @@ export function simulatedVotes(roomC: number, wantC: number, people: number, sha
   return { hotVotes: hot, coldVotes: Math.max(0, cold) };
 }
 
-function kwh(roomC: number, s: Scenario): number {
-  const envelopeKw = (Math.max(0, s.floorAreaM2) * Math.max(0, s.lossWPerM2K) * (roomC - s.outdoorC)) / 1000;
-  const peopleKw = (Math.max(0, s.occupancy) * Math.max(0, s.wattsPerPerson)) / 1000;
-  return Math.abs(envelopeKw - peopleKw) * Math.max(0, s.hours);
+/**
+ * Published numbers behind the energy estimate (demo values, not a metered building):
+ * - Cooling energy falls about 10% for each 1°C warmer setpoint. Hoyt, Arens & Zhang (2015),
+ *   Building and Environment 88: raising 22.2°C to 25°C saved 29% of cooling energy on average
+ *   across seven US climates. Cardiff (8%/°C) and de Chalendar et al. (2023, Energy and
+ *   Buildings 278: 13-28% per 2°F in offices) bracket it.
+ * - One seated person adds about 72 W sensible + 45 W latent heat (ASHRAE Fundamentals,
+ *   "seated, very light work"), so the cooling load grows with the people in the room.
+ * - Lights and plug loads about 10 W/m²; chiller COP 3; 0.4 kg CO₂e/kWh. Dollars: lib/billing.ts.
+ */
+export const ENERGY = {
+  savingPerC: 0.1,
+  sensibleW: 72,
+  latentW: 45,
+  internalWPerM2: 10,
+  cop: 3,
+  kgCo2PerKwh: 0.4,
+} as const;
+
+/** Heat the AC has to remove this hour at the 24°C reference, in kW (thermal). */
+export function coolingLoadKw(s: Scenario): number {
+  const people = Math.max(0, s.occupancy) * (ENERGY.sensibleW + ENERGY.latentW);
+  const internal = Math.max(0, s.floorAreaM2) * ENERGY.internalWPerM2;
+  const envelope = Math.max(0, s.floorAreaM2) * Math.max(0, s.lossWPerM2K) * Math.max(0, s.outdoorC - FIXED_SETPOINT_C);
+  return (people + internal + envelope) / 1000;
+}
+
+/**
+ * Electricity for this hour with the room held at roomC. The studies measure the room
+ * (thermostat) temperature, so the comparison is a thermostat holding the room at 24°C:
+ * each 1°C warmer room uses 10% less, each 1°C cooler 10% more.
+ */
+export function hourKwh(roomC: number, s: Scenario): number {
+  const factor = (1 - ENERGY.savingPerC) ** (roomC - FIXED_SETPOINT_C);
+  return (coolingLoadKw(s) / ENERGY.cop) * factor * Math.max(0, s.hours);
 }
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const signed = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v).toFixed(1)}`;
+const signed = (v: number) => (Math.abs(v) < 0.05 ? "±0.0" : `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`);
 
 export type ModelResult = ThermalResult & {
   model: Decision;
   roomAfterC: number;
+  closed: boolean;
 };
 
 /**
@@ -62,15 +100,15 @@ export function evaluateWithModel(s: Scenario, room: RoomModel, at: string): Mod
   const hot = Math.round(Math.max(0, s.hotVotes));
   const cold = Math.round(Math.max(0, s.coldVotes));
   const decision = room.preview(s.scheduledOpen ? s.occupancy : 0, s.scheduledOpen ? hot : 0, s.scheduledOpen ? cold : 0, at);
-  const targetC = s.scheduledOpen ? decision.setpointC : 28; // closed: set back
+  const targetC = s.scheduledOpen ? decision.setpointC : SETBACK_C; // closed: set back
   const roomAfterC = roomAtC(targetC, s);
   const deadband = 0.5;
   let action: HvacAction = "hold";
   if (base.season === "cooling" && base.perceivedC > roomAfterC + deadband) action = "cool";
   if (base.season === "heating" && base.perceivedC < roomAfterC - deadband) action = "heat";
 
-  const baselineKwh = kwh(roomAtC(FIXED_SETPOINT_C, s), s);
-  const adaptiveKwh = kwh(roomAfterC, s);
+  const baselineKwh = hourKwh(roomAtC(BASELINE_AC_C, s), s);
+  const adaptiveKwh = hourKwh(roomAfterC, s);
   const savedKwh = baselineKwh - adaptiveKwh;
   const people = Math.round(s.occupancy);
   const g = decision.group;
@@ -108,10 +146,10 @@ export function evaluateWithModel(s: Scenario, room: RoomModel, at: string): Mod
           detail: `Learned from ${decision.learnedHours - 1} earlier hour${decision.learnedHours === 2 ? "" : "s"} of votes in this room.`,
         },
       ]
-    : [{ name: "Closed", detail: "The room is closed, so votes are ignored and the AC sets back to 28°C." }];
+    : [{ name: "Closed", detail: `The room is closed, so votes are ignored and the AC sets back to ${SETBACK_C}°C.` }];
 
   const summary = !s.scheduledOpen
-    ? "The room is closed, so the AC sets back to 28°C."
+    ? `The room is closed, so the AC sets back to ${SETBACK_C}°C.`
     : hot + cold === 0 || hot === cold
       ? `Votes are balanced or absent, so the AC stays at ${targetC.toFixed(1)}°C.`
       : `${hot > cold ? "Hot" : "Cold"} votes lead, so the AC moves to ${targetC.toFixed(1)}°C.`;
@@ -121,7 +159,7 @@ export function evaluateWithModel(s: Scenario, room: RoomModel, at: string): Mod
     targetC,
     heatSetpointC: targetC - deadband,
     coolSetpointC: targetC + deadband,
-    baselineSetpointC: FIXED_SETPOINT_C,
+    baselineSetpointC: BASELINE_AC_C,
     voteShiftC: decision.setpointC - decision.startC,
     action,
     summary,
@@ -132,6 +170,7 @@ export function evaluateWithModel(s: Scenario, room: RoomModel, at: string): Mod
     savedPct: baselineKwh === 0 ? 0 : (savedKwh / baselineKwh) * 100,
     model: decision,
     roomAfterC,
+    closed: !s.scheduledOpen,
   };
 }
 
