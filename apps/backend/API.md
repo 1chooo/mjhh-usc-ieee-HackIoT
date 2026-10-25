@@ -68,9 +68,10 @@ The vote page drops one row per tap here. Votes are grouped by time: the votes a
 | Cast a vote | `POST /vote` `{"is_hot": true}` | `.from("vote").insert({ is_hot: true })` | publishable |
 | Votes since the latest record | `GET /vote?created_at=gt.<latest record's created_at>&select=is_hot` | `.from("vote").select("is_hot").gt("created_at", latestAt)` | publishable |
 | Votes a past cycle counted | `GET /vote?created_at=gt.<previous record's created_at>&created_at=lte.<that record's created_at>&select=is_hot` | `.select("is_hot").gt("created_at", previousAt).lte("created_at", recordAt)` | publishable |
+| Votes between two times | `GET /vote?created_at=gte.2026-10-25T07:50:53.007145Z&created_at=lte.2026-10-25T08:12:01.237115Z&order=created_at.asc` | `.select("*").gte("created_at", from).lte("created_at", to).order("created_at")` | publishable |
 | Change / delete one | `PATCH` / `DELETE /vote?id=eq.42` | `.update({ is_hot: false }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
 
-Count them on the client: rows with `is_hot: true` are hot, the rest are cold. The database sets `id` and `created_at`. A vote that includes `created_at` and is sent with the publishable key is rejected.
+Count them on the client: rows with `is_hot: true` are hot, the rest are cold. For a time range, `gte` / `lte` include both ends; use `gt` / `lt` to leave an end out. The database sets `id` and `created_at`. A vote that includes `created_at` and is sent with the publishable key is rejected.
 
 ## `setpoint`: the model's target temperature
 
@@ -130,13 +131,14 @@ A vote cast in the second between counting and saving the record is missed by th
 | --- | --- | --- |
 | Equal / not equal | `col=eq.x` / `col=neq.x` | `.eq()` / `.neq()` |
 | Greater / less than | `col=gt.x`, `gte`, `lt`, `lte` | `.gt()`, `.gte()`, `.lt()`, `.lte()` |
+| Between two values | `col=gte.a&col=lte.b` (repeat the column) | `.gte("col", a).lte("col", b)` |
 | One of several | `id=in.(41,42,43)` | `.in("id", [41, 42, 43])` |
 | Sort | `order=created_at.desc` | `.order("created_at", { ascending: false })` |
 | Page | `limit=50&offset=100` | `.range(100, 149)` |
 | Only some columns | `select=ppl,created_at` | `.select("ppl, created_at")` |
 | Get the new row back after insert | header `Prefer: return=representation` | `.insert({...}).select()` |
 
-In a raw URL, encode a timestamp's `+00:00` as `%2B00:00`, or use `Z`. Otherwise the `+` turns into a space.
+**Timestamps in a raw URL:** write them as ISO 8601 with `Z`, like `2026-10-25T07:50:53.007145Z`. The Postgres format works too (`2026-10-25 07:50:53.007145+00`), but encode its space as `%20` and its `+` as `%2B`. Otherwise the `+` turns into a space. supabase-js and supabase-py encode timestamps for you.
 
 ## Errors
 
