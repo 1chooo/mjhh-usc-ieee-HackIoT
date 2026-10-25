@@ -1,13 +1,13 @@
 # Database Schema
 
-Four tables in Supabase (Postgres), for a single room. The Raspberry Pi writes one snapshot per cycle. The vote page only drops votes into an inbox. There are no views: the newest `record` row is the current state.
+Four tables in Supabase (Postgres), for a single room. The Raspberry Pi writes one snapshot per cycle. The vote page only drops votes into an inbox. There are no views: the newest `record` row holds the current readings, and the votes after it are the current vote count.
 
 ```
 Vote page (browser) ──tap──▶ vote (inbox)
                                  │ counted each cycle
                                  ▼
 Raspberry Pi: YOLO + DHT11 + votes ──▶ AC model
-   ├──insert──▶ record    ppl, temp_c, hot_count, cold_count
+   ├──insert──▶ record    ppl, temp_c
    ├──insert──▶ setpoint  target_c
    └──insert──▶ saving    saved_usd
                                  │ Realtime
@@ -21,22 +21,18 @@ To fill the tables with two hours of sample cycles, run `python3 apps/backend/sc
 
 ### `record`
 
-One row per Pi cycle: everything the model saw.
+One row per Pi cycle: the sensor readings.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | `bigint` identity primary key | |
 | `ppl` | `smallint` not null, `>= 0` | People counted by YOLO |
 | `temp_c` | `real`, between −40 and 85, **nullable** | °C from the DHT11. `null` when the read failed, so a sensor problem never blocks a cycle. |
-| `hot_count` | `integer` not null, default 0, `>= 0` | Hot votes counted for this cycle |
-| `cold_count` | `integer` not null, default 0, `>= 0` | Cold votes counted for this cycle |
-| `created_at` | `timestamptz` not null, default `now()` | When the cycle ran |
-
-There's no check that `hot_count + cold_count <= ppl`, because YOLO can undercount and a valid snapshot would be rejected.
+| `created_at` | `timestamptz` not null, default `now()` | When the cycle ran. Also the boundary between one cycle's votes and the next. |
 
 ### `vote`
 
-The vote inbox: one row per tap on the vote page. The Pi counts the votes since the last `record` and saves the counts there.
+The vote inbox: one row per tap on the vote page. Votes are grouped by time: a cycle's votes are the ones after the previous `record` and up to its own. Each cycle, the Pi counts the votes since the last `record` and feeds them to the model.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -85,21 +81,21 @@ See [API.md](API.md) for every endpoint, with REST and supabase-js examples, and
 
 | Original | Now | Why |
 | --- | --- | --- |
-| `client` with `hot_count`, `cold_count` | Counts in `record`, taps in `vote` | The counts live in the snapshot, as sketched. Taps still go to their own inbox, because two browsers adding to the same counter at once could overwrite each other. |
+| `client` with `hot_count`, `cold_count` | `vote`, one row per tap; counts are worked out from it | A cycle's counts are the votes between two records, so storing them would only copy `vote`. One row per tap also means two browsers voting at once can't overwrite each other. |
 | No "ok" vote | Still none | `ppl` already gives the number of people in the room, so "ok" adds nothing. |
 | `space` with `name`, `ppl` | `record.ppl` | There's only one room, so there's no name to store. |
 | `tmp_record` with `tmp`, `place` | `record.temp_c` | One snapshot table holds every reading. There's one room, so no `place`. |
 | `time_stamp` | `created_at`, filled in by the database | Clients can't send a wrong or faked time. |
 | — | `setpoint`, `saving` | The model saves each target, and how much each cycle saved. |
 
-Earlier versions had a `room` table with a `room_id` on every row, a table per sensor, and a `room_now` view that put the latest of each together. They were removed: there's one room, and the Pi already gathers every reading in one cycle.
+Earlier versions had a `room` table with a `room_id` on every row, a table per sensor, a `room_now` view that put the latest of each together, and vote counts copied into `record`. They were removed: there's one room, the Pi already gathers every reading in one cycle, and the counts can always be worked out from `vote`.
 
 Every table keeps a plain `id`. Using `created_at` as the key would save one index, but two votes landing in the same microsecond would then be rejected.
 
 ## Open questions
 
 1. **Vote spam.** Anyone with the page open can vote as often as they like. If that matters for the demo, add anonymous sign-in, a `user_id` column, and a one-vote-per-minute rule.
-2. **Dashboard refresh rate.** The current state changes once per Pi cycle: every hour in production, every few seconds in the Pi's test mode.
+2. **Dashboard refresh rate.** The readings change once per Pi cycle: every hour in production, every few seconds in the Pi's test mode. Votes show up live.
 
 ## SQL and changing the schema
 

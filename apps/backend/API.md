@@ -42,35 +42,35 @@ Anything the publishable key can do, the secret key can do too.
 
 ## `record`: one snapshot per Pi cycle
 
-The newest row is the room's current state. This is the main endpoint for the dashboard.
+The newest row holds the room's current readings. This is the main endpoint for the dashboard.
 
 | Operation | REST | supabase-js | Key |
 | --- | --- | --- | --- |
 | Current state | `GET /record?order=created_at.desc&limit=1` | `.from("record").select("*").order("created_at", { ascending: false }).limit(1).single()` | publishable |
 | History since a time | `GET /record?created_at=gte.2026-10-24T19:00:00Z&order=created_at.asc` | `.from("record").select("*").gte("created_at", since).order("created_at")` | publishable |
-| Save a snapshot | `POST /record` `{"ppl": 36, "temp_c": 21.4, "hot_count": 1, "cold_count": 12}` | `.from("record").insert({ ppl: 36, temp_c: 21.4, hot_count: 1, cold_count: 12 })` | secret |
+| Save a snapshot | `POST /record` `{"ppl": 36, "temp_c": 21.4}` | `.from("record").insert({ ppl: 36, temp_c: 21.4 })` | secret |
 | Fix / delete one | `PATCH` / `DELETE /record?id=eq.42` | `.update({ ppl: 35 }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
 
 ```json
-[{ "id": 13, "ppl": 36, "temp_c": 21.4, "hot_count": 1, "cold_count": 12,
-   "created_at": "2026-10-25T08:10:00.12+00:00" }]
+[{ "id": 13, "ppl": 36, "temp_c": 21.4, "created_at": "2026-10-25T08:10:00.12+00:00" }]
 ```
 
 - `ppl` is required and must be 0 or more.
 - `temp_c` can be `null` (the DHT11 read failed). Otherwise it must be between −40 and 85 °C.
-- `hot_count` and `cold_count` default to 0 and can't be negative. They're the votes the Pi counted for that cycle.
+- There are no vote counts here. They come from `vote`, below.
 
 ## `vote`: the vote inbox
 
-The vote page drops one row per tap here. The Pi counts the new ones each cycle and saves the totals in `record`.
+The vote page drops one row per tap here. Votes are grouped by time: the votes after the latest `record` are the live count for the next cycle, and a past cycle counted the votes between its `record` and the one before it.
 
 | Operation | REST | supabase-js | Key |
 | --- | --- | --- | --- |
 | Cast a vote | `POST /vote` `{"is_hot": true}` | `.from("vote").insert({ is_hot: true })` | publishable |
-| Votes since a time | `GET /vote?created_at=gt.2026-10-25T08:00:00Z&select=is_hot` | `.from("vote").select("is_hot").gt("created_at", since)` | publishable |
+| Votes since the latest record | `GET /vote?created_at=gt.<latest record's created_at>&select=is_hot` | `.from("vote").select("is_hot").gt("created_at", latestAt)` | publishable |
+| Votes a past cycle counted | `GET /vote?created_at=gt.<previous record's created_at>&created_at=lte.<that record's created_at>&select=is_hot` | `.select("is_hot").gt("created_at", previousAt).lte("created_at", recordAt)` | publishable |
 | Change / delete one | `PATCH` / `DELETE /vote?id=eq.42` | `.update({ is_hot: false }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
 
-`is_hot: true` means hot and `false` means cold. The database sets `id` and `created_at`. A vote that includes `created_at` and is sent with the publishable key is rejected.
+Count them on the client: rows with `is_hot: true` are hot, the rest are cold. The database sets `id` and `created_at`. A vote that includes `created_at` and is sent with the publishable key is rejected.
 
 ## `setpoint`: the model's target temperature
 
@@ -117,12 +117,12 @@ def read_votes() -> tuple[int, int]:
     return hot, len(votes) - hot
 
 # in run_cycle, after target = model.update(...)
-sb.table("record").insert({"ppl": n, "temp_c": temp, "hot_count": hot, "cold_count": cold}).execute()
+sb.table("record").insert({"ppl": n, "temp_c": temp}).execute()
 sb.table("setpoint").insert({"target_c": target}).execute()
 sb.table("saving").insert({"saved_usd": saved}).execute()   # saved: your estimate for this cycle
 ```
 
-A vote cast in the second between counting and saving the record is missed. That's fine for comfort votes.
+A vote cast in the second between counting and saving the record is missed by the model. That's fine for comfort votes.
 
 ## Filters and options
 
@@ -145,17 +145,19 @@ Error bodies look like `{"code": "...", "message": "...", "details": "..."}`.
 | HTTP | `code` | Meaning |
 | --- | --- | --- |
 | 401 | `42501` | This key isn't allowed to do that. For example, the publishable key writing a record, or sending `created_at` with a vote. |
-| 400 | `23514` | A value is out of range: negative `ppl` or vote count, `temp_c` outside −40..85, or `target_c` outside 16..30. |
+| 400 | `23514` | A value is out of range: negative `ppl`, `temp_c` outside −40..85, or `target_c` outside 16..30. |
 | 400 | `23502` | A required field is missing (`ppl`, `is_hot`, `target_c`, `saved_usd`). |
+| 400 | `PGRST204` | A column that doesn't exist, for example `hot_count` on `record`. Vote counts come from `vote`. |
 
 ## Live updates
 
-Each new `record` row is the full current state, so the dashboard can show it straight from the event:
+Each new `record` row has the latest readings, so the dashboard can show it straight from the event. New `vote` rows add to the live count, which starts over at zero when the next `record` arrives:
 
 ```ts
 supabase
   .channel("live")
   .on("postgres_changes", { event: "INSERT", schema: "public", table: "record" }, ({ new: row }) => setCurrent(row))
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "vote" }, ({ new: row }) => countVote(row))
   .on("postgres_changes", { event: "INSERT", schema: "public", table: "setpoint" }, ({ new: row }) => setTarget(row))
   .on("postgres_changes", { event: "INSERT", schema: "public", table: "saving" }, ({ new: row }) => addSaving(row))
   .subscribe();
