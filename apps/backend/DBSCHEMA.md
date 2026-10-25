@@ -16,7 +16,7 @@ New `setpoint` rows also go out over Realtime, so the gateway can send each targ
 
 ### `room`
 
-One row per room, rarely changes. Starts empty: add rooms with the secret key (see [API.md](API.md#room)).
+One row per room, rarely changes. Add rooms with the secret key (see [API.md](API.md#room)), or run `python3 apps/backend/scripts/seed.py` to add the four rooms the web app simulates, with two hours of sample history ending at the web app's default readings.
 
 | Column | Type | Notes |
 | --- | --- | --- |
