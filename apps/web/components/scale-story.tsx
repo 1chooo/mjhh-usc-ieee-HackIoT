@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
-import type { EnergyImpact } from "../lib/energy-impact";
+import { useId, useMemo, useState } from "react";
+import { RoomModel } from "../lib/ac-model";
+import { dailySavings } from "../lib/sim-run";
+import { firstClassAt, scenarioFor, simRooms } from "../lib/sim-rooms";
 import styles from "./scale-story.module.css";
 
 const scales = [
@@ -22,11 +24,18 @@ const money = new Intl.NumberFormat("en-US", {
 });
 const count = new Intl.NumberFormat("en-US");
 
+/** The room the per-day saving comes from: the simulator's first room, as it opens. */
+const sampleRoom = simRooms[0]!;
+
+/**
+ * Same formula as the simulator's scale-up: what one room saves per day × rooms × time.
+ * The per-day saving is the simulator's own (lib/sim-run.ts dailySavings).
+ */
 export function ScaleStory({
-  impact,
+  spanHours,
   spanLabel,
 }: {
-  impact: EnergyImpact;
+  spanHours: number;
   spanLabel: string;
 }) {
   const [rooms, setRooms] = useState(100);
@@ -35,9 +44,15 @@ export function ScaleStory({
   );
   const headingId = useId();
   const rangeId = useId();
-  const electricity = impact.saved.electricityKwh * rooms;
-  const cost = impact.saved.cost * rooms;
-  const emissions = impact.saved.emissionsKg * rooms;
+  // eight weeks of hours (about a second), worked out once
+  const perDay = useMemo(
+    () => dailySavings(sampleRoom, new RoomModel(), firstClassAt(sampleRoom), scenarioFor(sampleRoom, null, 24)),
+    [],
+  );
+  const days = spanHours / 24;
+  const electricity = perDay.kwh * rooms * days;
+  const cost = perDay.usd * rooms * days;
+  const emissions = perDay.kgCo2 * rooms * days;
   const increasing = electricity < -0.0005;
   const roomLabel = rooms === 1 ? "similar room" : "similar rooms";
 
@@ -108,6 +123,10 @@ export function ScaleStory({
           <h3>
             {count.format(rooms)} {roomLabel} · {spanLabel}
           </h3>
+          <p>
+            {money.format(perDay.usd)} per room per day × {count.format(rooms)} {rooms === 1 ? "room" : "rooms"} ×{" "}
+            {days >= 1 ? `${count.format(Math.round(days))} ${Math.round(days) === 1 ? "day" : "days"}` : spanLabel}
+          </p>
           <dl className={increasing ? styles.increase : styles.savings}>
             <div>
               <dt>{increasing ? "Extra electricity" : "Electricity saved"}</dt>
@@ -131,9 +150,9 @@ export function ScaleStory({
 
       <div className={styles.foot}>
         <p>
-          These totals repeat the current room and conditions across the
-          selected spaces and time. They are estimates, not measured building
-          savings.
+          Per room: {sampleRoom.name} ({sampleRoom.building}) from the simulator, its next 8 weeks
+          averaged per day, priced as LADWP two-month bills, against an AC fixed at 22°C. Estimates,
+          not measured building savings.
         </p>
         <Link className="text-link" href="/impact">
           Impact <span aria-hidden="true">↗</span>

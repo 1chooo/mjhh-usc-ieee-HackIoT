@@ -1,6 +1,6 @@
 import { RoomModel } from "./ac-model";
 import type { Scenario } from "./thermal";
-import { BASELINE_AC_C, SETBACK_C, hourKwh, roomAtC, shiftClock, simulatedVotes } from "./model-sim";
+import { BASELINE_AC_C, ENERGY, SETBACK_C, hourKwh, roomAtC, shiftClock, simulatedVotes } from "./model-sim";
 import { classAt, scenarioFor, weekLabel, type SimRoom } from "./sim-rooms";
 import { addHour, NO_TOTALS, type EnergyTotals } from "./billing";
 import type { HourLog } from "../components/sim/model-panel";
@@ -84,11 +84,15 @@ export function step(def: SimRoom, room: RoomModel, s: Scenario, at: string, wan
 /** Hours the scale-up estimate looks ahead: eight weeks, about one two-month bill. */
 export const PROJECTION_HOURS = 24 * 7 * 8;
 
+/** What one room saves per day, averaged over the projection. */
+export type DailySavings = { usd: number; kwh: number; kgCo2: number };
+
 /**
- * Dollars one room saves per day: the next eight weeks run on a copy of the model (so the
- * real one is untouched), billed with LADWP two-month bills, divided by the days.
+ * What one room saves per day: the next eight weeks run on a copy of the model (so the real
+ * one is untouched), billed with LADWP two-month bills, divided by the days. Compared with an
+ * AC fixed at 22°C.
  */
-export function dailySavingsUsd(def: SimRoom, model: RoomModel, at: string, keep: Scenario): number {
+export function dailySavings(def: SimRoom, model: RoomModel, at: string, keep: Scenario): DailySavings {
   const room = new RoomModel();
   room.load(model.save());
   let current = arrival(def, room, at, keep, true);
@@ -100,6 +104,13 @@ export function dailySavingsUsd(def: SimRoom, model: RoomModel, at: string, keep
     clock = r.nextAt;
     current = r.next;
   }
-  const saved = totals.bills.reduce((sum, b) => sum + b.fixedCost - b.modelCost, 0);
-  return saved / (PROJECTION_HOURS / 24);
+  const days = PROJECTION_HOURS / 24;
+  const usd = totals.bills.reduce((sum, b) => sum + b.fixedCost - b.modelCost, 0) / days;
+  const kwh = (totals.fixedKwh - totals.modelKwh) / days;
+  return { usd, kwh, kgCo2: kwh * ENERGY.kgCo2PerKwh };
+}
+
+/** Dollars one room saves per day (see dailySavings). */
+export function dailySavingsUsd(def: SimRoom, model: RoomModel, at: string, keep: Scenario): number {
+  return dailySavings(def, model, at, keep).usd;
 }
