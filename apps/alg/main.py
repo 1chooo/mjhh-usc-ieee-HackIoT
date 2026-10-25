@@ -2,9 +2,11 @@
 Every hour at RUN_MINUTE: count people -> read temperature -> read votes -> model.update() -> set the AC.
 Optionally at PRESET_MINUTE: model.next_hour() presets the AC for the class coming next.
 '''
+import json
 import os
 import time
-from datetime import datetime, timedelta
+import urllib.request
+from datetime import datetime, timedelta, timezone
 
 from acmodel import SimpleModel
 
@@ -20,9 +22,41 @@ CONF = 0.4                       # detection confidence: lower = fewer missed pe
 DHT_PIN = "D4"                   # DHT11 data pin: GPIO4 = physical pin 7
 DHT_READINGS = 3                 # average this many good readings (the DHT11 needs ~2 s between reads)
 TEST_INTERVAL = 9               # seconds between cycles for testing; None = real hourly schedule
+VOTE_WINDOW = TEST_INTERVAL      # read_votes counts votes from the last this many seconds; None = since the last record
 
 _counter = None
 _dht = None
+
+
+# ---------------------------------------------------------------------- database (Supabase REST, see apps/backend/API.md)
+def load_env():
+    """KEY=value lines from apps/alg/.env or apps/backend/.env; real environment variables win."""
+    for path in (os.path.join(HERE, ".env"), os.path.join(HERE, "..", "backend", ".env")):
+        if not os.path.exists(path):
+            continue
+        for line in open(path).read().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
+load_env()
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://avcqkyfobsalzdzzgvqm.supabase.co")
+SUPABASE_KEY = os.environ["SUPABASE_SECRET_KEY"]   # secret key: only it can write record / setpoint
+
+
+def db(method: str, path: str, body: dict | None = None):
+    """One REST call, e.g. db("GET", "/vote?select=is_hot") or db("POST", "/record", {...})."""
+    req = urllib.request.Request(
+        f"{SUPABASE_URL}/rest/v1{path}",
+        method=method,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"apikey": SUPABASE_KEY, "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        text = res.read()
+    return json.loads(text) if text else None
 
 
 # ---------------------------------------------------------------------- inputs
@@ -59,8 +93,15 @@ def read_temperature() -> float | None:
 
 
 def read_votes() -> tuple[int, int]:
-    """Vote result for this hour -> (hot, cold). TODO: real vote source."""
-    return 2, 0
+    """Votes from the last VOTE_WINDOW seconds (or since the last record) -> (hot, cold)."""
+    if VOTE_WINDOW:
+        since = (datetime.now(timezone.utc) - timedelta(seconds=VOTE_WINDOW)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    else:
+        last = db("GET", "/record?select=created_at&order=created_at.desc&limit=1")
+        since = last[0]["created_at"].replace("+", "%2B") if last else "1970-01-01T00:00:00Z"
+    votes = db("GET", f"/vote?select=is_hot&created_at=gt.{since}")
+    hot = sum(1 for v in votes if v["is_hot"])
+    return hot, len(votes) - hot
 
 
 def set_ac(target: float):
@@ -84,7 +125,11 @@ def run_cycle(model: SimpleModel, timestamp: str | None = None):
     target = model.update(n, hot, cold, timestamp)
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] {n} people, {'n/a' if temp is None else f'{temp:.1f}'} C, hot {hot} / cold {cold} -> {target} C")
     print(set_ac(target))
-    # return data to the database {人數, current temperature}
+    try:                                 # a network problem must not stop the AC update either
+        db("POST", "/record", {"ppl": n, "temp_c": temp})
+        db("POST", "/setpoint", {"target_c": target})
+    except Exception as e:
+        print(f"  saving to the database failed: {e!r}")
 
 
 
