@@ -1,4 +1,4 @@
-/* How the setpoint is chosen: a formula row, two figures, the vote rules, one hour. */
+/* How the setpoint is chosen: a formula row and two figures. */
 .story {
   gap: 48px;
   padding-top: 5rem;
@@ -83,8 +83,7 @@
   width: 100%;
 }
 
-.panel,
-.hour {
+.panel {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -96,25 +95,18 @@
   background: var(--card);
 }
 
-.hour {
-  width: 100%;
-}
-
-.panel figcaption,
-.hour figcaption {
+.panel figcaption {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.panel h3,
-.hour h3 {
+.panel h3 {
   font-size: 1.2rem;
   letter-spacing: -0.015em;
 }
 
-.chartBox,
-.timelineBox {
+.chartBox {
   overflow-x: auto;
 }
 
@@ -125,23 +117,10 @@
   height: auto;
 }
 
-.timeline {
-  display: block;
-  width: 100%;
-  max-width: 960px;
-  min-width: 620px;
-  height: auto;
-}
-
 /* svg parts */
-.axis,
-.track {
+.axis {
   stroke: var(--line-strong);
   stroke-width: 1.5;
-}
-
-.track {
-  stroke-width: 2;
 }
 
 .grid {
@@ -173,8 +152,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.axisLabel,
-.lineLabel {
+.axisLabel {
   fill: var(--muted);
   font-size: 13px;
 }
@@ -195,10 +173,6 @@
 
 .dotCool {
   fill: var(--cold);
-}
-
-.dotMuted {
-  fill: var(--faint);
 }
 
 .leader {
@@ -230,29 +204,12 @@
   fill: var(--cold);
 }
 
-.arrow,
-.arrowCool {
+.arrow {
   fill: none;
   stroke: var(--cold);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.cross {
-  fill: none;
-  stroke: var(--hot);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-
-.step {
-  stroke: var(--ink);
-  stroke-width: 2;
-}
-
-.voteWindow {
-  fill: color-mix(in oklch, var(--hot) 22%, transparent);
 }
 
 /* 3. weeks */
@@ -332,41 +289,6 @@
   color: var(--muted);
 }
 
-/* 4. rules */
-.rules {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  width: 100%;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--line-strong);
-}
-
-.rules li {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  padding: 22px 24px 4px 0;
-}
-
-.rules li + li {
-  padding-left: 24px;
-  border-left: 1px solid var(--line);
-}
-
-.rules svg {
-  width: 120px;
-  height: 48px;
-}
-
-.rules h4 {
-  margin: 0;
-  font-size: 1.05rem;
-  letter-spacing: -0.01em;
-}
-
 @media (max-width: 960px) {
   .formula {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -379,27 +301,11 @@
   .pair {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .rules {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .rules li:nth-child(3) {
-    padding-left: 0;
-    border-left: 0;
-  }
 }
 
 @media (max-width: 560px) {
-  .formula,
-  .rules {
+  .formula {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .rules li,
-  .rules li + li {
-    padding-left: 0;
-    border-left: 0;
   }
 
   .weekRow {

@@ -1,3 +1,4 @@
+import { fromF, toF } from "../lib/units";
 import styles from "./algorithm-story.module.css";
 
 /**
@@ -19,7 +20,7 @@ const T_MIN = 16;
 const x = (n: number) => X0 + (n / N_MAX) * (X1 - X0);
 const y = (t: number) => Y0 + ((T_MAX - t) / (T_MAX - T_MIN)) * (Y1 - Y0);
 
-// labelT: where the label sits (°C); labels for the crowded small classes sit out to the right
+// labelT: where the label sits (°C, converted for display); labels for the crowded small classes sit out to the right
 const groups = [
   { name: "MATH 125", people: 22, offset: 1.6, labelN: 95, labelT: 28.6 },
   { name: "Quiet stacks", people: 45, offset: 1.7, labelN: 95, labelT: 27.4 },
@@ -29,16 +30,16 @@ const groups = [
 ];
 
 const week1 = [
-  { time: "09:00", label: "WRIT 150", tag: "new group", temp: "25.0 → 24.0", kind: "new" },
-  { time: "10:00", label: "WRIT 150", tag: "same group", temp: "24.0", kind: "same" },
-  { time: "11:00", label: "MATH 125", tag: "new group", temp: "25.5 → 27.5", kind: "new" },
-  { time: "12:00", label: "Empty", tag: "set back", temp: "26.0", kind: "empty" },
+  { time: "09:00", label: "WRIT 150", tag: "new group", temp: "77.0 → 75.2°F", kind: "new" },
+  { time: "10:00", label: "WRIT 150", tag: "same group", temp: "75.2°F", kind: "same" },
+  { time: "11:00", label: "MATH 125", tag: "new group", temp: "77.9 → 81.5°F", kind: "new" },
+  { time: "12:00", label: "Empty", tag: "set back", temp: "78.8°F", kind: "empty" },
 ];
 const week2 = [
-  { time: "09:00", label: "WRIT 150", tag: "recognized", temp: "starts 24.0", kind: "known" },
-  { time: "10:00", label: "WRIT 150", tag: "same group", temp: "24.0", kind: "same" },
-  { time: "11:00", label: "MATH 125", tag: "recognized", temp: "starts 27.5", kind: "known" },
-  { time: "12:00", label: "Empty", tag: "set back", temp: "26.0", kind: "empty" },
+  { time: "09:00", label: "WRIT 150", tag: "recognized", temp: "starts 75.2°F", kind: "known" },
+  { time: "10:00", label: "WRIT 150", tag: "same group", temp: "75.2°F", kind: "same" },
+  { time: "11:00", label: "MATH 125", tag: "recognized", temp: "starts 81.5°F", kind: "known" },
+  { time: "12:00", label: "Empty", tag: "set back", temp: "78.8°F", kind: "empty" },
 ];
 
 export function AlgorithmStory() {
@@ -85,7 +86,7 @@ export function AlgorithmStory() {
         <li className={styles.op} aria-hidden="true">=</li>
         <li className={`${styles.term} ${styles.result}`}>
           <strong>AC setpoint</strong>
-          <span className={styles.big}>16–30°C</span>
+          <span className={styles.big}>61–86°F</span>
         </li>
       </ol>
 
@@ -96,11 +97,11 @@ export function AlgorithmStory() {
             <h3>Same curve, different classes</h3>
           </figcaption>
           <div className={styles.chartBox}>
-            <svg viewBox="0 0 680 360" className={styles.chart} role="img" aria-label="AC setpoint against head count. The starting line falls from 26°C at 1 person to 18°C at 300. Five classes sit above or below it by their learned offsets.">
-              {[18, 20, 22, 24, 26, 28].map((t) => (
-                <g key={t}>
-                  <line x1={X0} x2={X1} y1={y(t)} y2={y(t)} className={styles.grid} />
-                  <text x={X0 - 10} y={y(t) + 4} textAnchor="end" className={styles.tick}>{t}°</text>
+            <svg viewBox="0 0 680 360" className={styles.chart} role="img" aria-label="AC setpoint against head count. The starting line falls from 78.8°F at 1 person to 64.4°F at 300. Five classes sit above or below it by their learned offsets.">
+              {[64, 68, 72, 76, 80, 84].map((f) => (
+                <g key={f}>
+                  <line x1={X0} x2={X1} y1={y(fromF(f))} y2={y(fromF(f))} className={styles.grid} />
+                  <text x={X0 - 10} y={y(fromF(f)) + 4} textAnchor="end" className={styles.tick}>{f}°F</text>
                 </g>
               ))}
               {[0, 100, 200, 300].map((n) => (
@@ -122,7 +123,7 @@ export function AlgorithmStory() {
                       className={styles.leader}
                     />
                     <text x={x(g.labelN)} y={y(g.labelT)} textAnchor={g.labelN > g.people ? "start" : "end"} className={styles.groupLabel}>
-                      {g.name} {g.offset > 0 ? "+" : "−"}{Math.abs(g.offset).toFixed(1)}°
+                      {g.name} {g.offset > 0 ? "+" : "−"}{Math.abs(g.offset * 1.8).toFixed(1)}°F
                     </text>
                   </g>
                 );
@@ -148,7 +149,7 @@ export function AlgorithmStory() {
                     <span className={styles.time}>{c.time}</span>
                     <strong>{c.label}</strong>
                     {c.kind === "new" || c.kind === "known" ? <span className={styles.tag}>{c.tag}</span> : null}
-                    <span className={styles.temp}>{c.temp}°C</span>
+                    <span className={styles.temp}>{c.temp}</span>
                   </div>
                 ))}
               </div>
@@ -157,66 +158,6 @@ export function AlgorithmStory() {
         </figure>
       </div>
 
-      {/* 4. Vote rules */}
-      <ul className={styles.rules} aria-label="Vote rules">
-        <li>
-          <svg viewBox="0 0 120 48" aria-hidden="true">
-            <rect x="4" y="14" width="70" height="20" rx="4" className={styles.barHot} />
-            <rect x="76" y="14" width="40" height="20" rx="4" className={styles.barCold} />
-          </svg>
-          <h4>Majority, not one voice</h4>
-        </li>
-        <li>
-          <svg viewBox="0 0 120 48" aria-hidden="true">
-            <path d="M20 24 H96 M84 14 L96 24 L84 34" className={styles.arrowCool} />
-            <path d="M100 10 L112 38 M112 10 L100 38" className={styles.cross} />
-          </svg>
-          <h4>Only the way the votes point</h4>
-        </li>
-        <li>
-          <svg viewBox="0 0 120 48" aria-hidden="true">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <line key={i} x1={12 + i * 24} x2={12 + i * 24} y1="12" y2="36" className={styles.step} />
-            ))}
-            <line x1="12" x2="108" y1="24" y2="24" className={styles.baseline} />
-          </svg>
-          <h4>Half-degree steps</h4>
-        </li>
-        <li>
-          <svg viewBox="0 0 120 48" aria-hidden="true">
-            {Array.from({ length: 6 }, (_, i) => (
-              <circle key={i} cx={10 + i * 12} cy="24" r="4" className={styles.dotMuted} />
-            ))}
-            <text x="116" y="29" textAnchor="end" className={styles.tick}>&lt; 15</text>
-          </svg>
-          <h4>Drop-in hours stay gentle</h4>
-        </li>
-      </ul>
-
-      {/* 5. One hour */}
-      <figure className={styles.hour}>
-        <figcaption>
-          <h3>One hour on the Raspberry Pi</h3>
-        </figcaption>
-        <div className={styles.timelineBox}>
-          <svg viewBox="0 0 900 150" className={styles.timeline} role="img" aria-label="An hour from :00 to :60. At :00 the class walks in and the camera counts heads. At :30 votes close and the model sets the AC. At :45 it can pre-set the AC for the class it expects next.">
-            <line x1="40" x2="860" y1="70" y2="70" className={styles.track} />
-            {[0, 15, 30, 45, 60].map((m) => (
-              <g key={m}>
-                <line x1={40 + (m / 60) * 820} x2={40 + (m / 60) * 820} y1="62" y2="78" className={styles.axis} />
-                <text x={40 + (m / 60) * 820} y="100" textAnchor="middle" className={styles.tick}>:{String(m).padStart(2, "0")}</text>
-              </g>
-            ))}
-            <rect x="40" y="62" width={(30 / 60) * 820} height="16" rx="8" className={styles.voteWindow} />
-            <circle cx="40" cy="70" r="9" className={styles.dotInk} />
-            <circle cx={40 + 0.5 * 820} cy="70" r="11" className={styles.dotWarm} />
-            <circle cx={40 + 0.75 * 820} cy="70" r="9" className={styles.dotCool} />
-            <text x="40" y="36" className={styles.groupLabel}>Class walks in · camera counts</text>
-            <text x={40 + 0.5 * 820} y="36" textAnchor="middle" className={styles.groupLabel}>Votes close · update() sets the AC</text>
-            <text x={40 + 0.75 * 820 + 6} y="132" textAnchor="middle" className={styles.groupLabel}>next_hour() pre-sets the next class</text>
-          </svg>
-        </div>
-      </figure>
     </section>
   );
 }
