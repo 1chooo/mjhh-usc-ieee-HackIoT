@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlgorithmStory } from "../components/algorithm-story";
 import { LandingSimulator } from "../components/landing-simulator";
 import styles from "./page.module.css";
 
@@ -83,6 +84,8 @@ export default function Home() {
       </section>
 
       <LandingSimulator />
+
+      <AlgorithmStory />
     </div>
   );
 }

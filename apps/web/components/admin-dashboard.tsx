@@ -4,6 +4,7 @@ import { type RoomLive, type RoomRecord } from "../lib/supabase-rest";
 import { useLiveRoom } from "../lib/use-live-room";
 import { StatGrid } from "./console/stat-grid";
 import { VoteMeter } from "./result-block";
+import { fmtF } from "../lib/units";
 
 function formatUsd(value: number): string {
   const amount = Math.abs(value).toLocaleString("en-US", {
@@ -14,7 +15,7 @@ function formatUsd(value: number): string {
 }
 
 function formatTemp(tempC: number | null): string {
-  return tempC == null ? "No reading" : `${tempC.toFixed(1)}°C`;
+  return tempC == null ? "No reading" : fmtF(tempC);
 }
 
 function formatWhen(iso: string): string {
@@ -131,7 +132,7 @@ export function AdminDashboard() {
               {
                 label: "Setpoint",
                 value: room.setpoint
-                  ? `${room.setpoint.target_c.toFixed(1)}°C`
+                  ? fmtF(room.setpoint.target_c)
                   : "No target",
               },
               {

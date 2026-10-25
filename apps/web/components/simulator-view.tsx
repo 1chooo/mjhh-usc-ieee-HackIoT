@@ -40,6 +40,7 @@ import {
   sampleStory,
   STORY_MS,
 } from "./sim/story";
+import { fmtF, fromF, toF } from "../lib/units";
 
 type PlayLabel = "play" | "pause" | "replay";
 
@@ -504,7 +505,7 @@ export function SimulatorView() {
               </button>
             </div>
             <p className={`badge ${result.action}`}>
-              {result.action} · {result.targetC.toFixed(1)}°C
+              {result.action} · {fmtF(result.targetC)}
             </p>
           </div>
           <div className="sim-tags">
@@ -665,21 +666,21 @@ export function SimulatorView() {
               <legend>Readings</legend>
               <Slider
                 label="Outdoor temperature"
-                min={0}
-                max={40}
-                step={0.5}
-                unit="°C"
-                value={scenario.outdoorC}
-                onChange={(outdoorC) => patch({ outdoorC })}
+                min={32}
+                max={104}
+                step={1}
+                unit="°F"
+                value={toF(scenario.outdoorC)}
+                onChange={(f) => patch({ outdoorC: fromF(f) })}
               />
               <Slider
                 label="Indoor temperature"
-                min={16}
-                max={32}
-                step={0.1}
-                unit="°C"
-                value={scenario.indoorC}
-                onChange={(indoorC) => patch({ indoorC })}
+                min={61}
+                max={90}
+                step={0.2}
+                unit="°F"
+                value={toF(scenario.indoorC)}
+                onChange={(f) => patch({ indoorC: fromF(f) })}
               />
               <Slider
                 label="Relative humidity"
@@ -728,12 +729,12 @@ export function SimulatorView() {
               />
               <Slider
                 label="Group prefers"
-                min={16}
-                max={30}
+                min={61}
+                max={86}
                 step={0.5}
-                unit="°C"
-                value={wantC}
-                onChange={changeWant}
+                unit="°F"
+                value={toF(wantC)}
+                onChange={(f) => changeWant(fromF(f))}
               />
               <button
                 type="button"
@@ -825,7 +826,7 @@ function ScaleFormula({
   return (
     <div className="sim-scale" role="group" aria-label="Savings: per room per day × rooms × days">
       <div className="sim-scale-row">
-        <span className="sim-scale-rate" title="Average saved per room per day: the next 8 weeks of this room, LADWP bills, against an AC fixed at 22°C">
+        <span className="sim-scale-rate" title="Average saved per room per day: the next 8 weeks of this room, LADWP bills, against an AC fixed at 71.6°F">
           {perRoomDay === null ? "$—" : formatScaleDollars(perRoomDay)}
           <small>/day</small>
         </span>

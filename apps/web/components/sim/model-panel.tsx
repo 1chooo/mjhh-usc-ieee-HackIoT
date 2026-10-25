@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { BASELINE_AC_C, ENERGY, SETBACK_C, type ModelResult } from "../../lib/model-sim";
 import type { EnergyTotals } from "../../lib/billing";
+import { fmtDeltaF, fmtF, signedF, toF } from "../../lib/units";
 
 export type HourLog = {
   at: string;
@@ -114,7 +115,7 @@ export function ModelPanel({
       </div>
       <div className="model-body" role="tabpanel">
         {tab === "decision" && result.closed ? (
-          <p className="model-hint">The room is closed: votes are ignored and the AC sets back to {SETBACK_C}°C. Open it to see the model decide.</p>
+          <p className="model-hint">The room is closed: votes are ignored and the AC sets back to {fmtF(SETBACK_C)}. Open it to see the model decide.</p>
         ) : null}
         {tab === "decision" && !result.closed ? (
           <div className="model-split">
@@ -124,15 +125,15 @@ export function ModelPanel({
               <dl className="model-temps">
                 <div>
                   <dt>AC set</dt>
-                  <dd>{result.targetC.toFixed(1)}°C</dd>
+                  <dd>{fmtF(result.targetC)}</dd>
                 </div>
                 <div>
                   <dt>Room ≈</dt>
-                  <dd>{result.roomAfterC.toFixed(1)}°C</dd>
+                  <dd>{fmtF(result.roomAfterC)}</dd>
                 </div>
                 <div>
                   <dt>Group wants</dt>
-                  <dd>{wantC === null ? "—" : `${wantC.toFixed(1)}°C`}</dd>
+                  <dd>{wantC === null ? "—" : fmtF(wantC)}</dd>
                 </div>
               </dl>
             </div>
@@ -156,10 +157,10 @@ function Waterfall({ result }: { result: ModelResult }) {
   const m = result.model;
   const afterGroup = m.curveC + m.offsetC;
   const steps = [
-    { label: "People", from: null as number | null, to: m.curveC, note: `${m.curveC.toFixed(2)}°C` },
-    { label: "Group taste", from: m.curveC, to: afterGroup, note: signed(m.offsetC) },
-    { label: "0.5° steps, vote rules", from: afterGroup, to: result.targetC, note: signed(result.targetC - afterGroup) },
-    { label: "AC setpoint", from: null, to: result.targetC, note: `${result.targetC.toFixed(1)}°C` },
+    { label: "People", from: null as number | null, to: m.curveC, note: fmtF(m.curveC) },
+    { label: "Group taste", from: m.curveC, to: afterGroup, note: signedF(m.offsetC) },
+    { label: "Steps, vote rules", from: afterGroup, to: result.targetC, note: signedF(result.targetC - afterGroup) },
+    { label: "AC setpoint", from: null, to: result.targetC, note: fmtF(result.targetC) },
   ];
   const values = [m.curveC, afterGroup, result.targetC, m.startC];
   const lo = Math.floor(Math.min(...values) - 0.5);
@@ -184,11 +185,11 @@ function Waterfall({ result }: { result: ModelResult }) {
         );
       })}
       <div className="wf-axis">
-        <span>{lo}°C</span>
+        <span>{fmtF(lo, 0)}</span>
         <span className="wf-legend">
-          <i /> start {m.startC.toFixed(1)}°C
+          <i /> start {fmtF(m.startC)}
         </span>
-        <span>{hi}°C</span>
+        <span>{fmtF(hi, 0)}</span>
       </div>
     </div>
   );
@@ -205,8 +206,8 @@ function VoteTug({ hot, cold, correctionC }: { hot: number; cold: number; correc
       : hot === cold
         ? "Balanced: the AC holds"
         : hot > cold
-          ? `Hot majority: cooler, ${signed(correctionC)}°C asked`
-          : `Cold majority: warmer, ${signed(correctionC)}°C asked`;
+          ? `Hot majority: cooler, ${signedF(correctionC)} asked`
+          : `Cold majority: warmer, ${signedF(correctionC)} asked`;
   return (
     <div className="tug" aria-label={`${cold} cold and ${hot} hot votes. ${verdict}`}>
       <div className="tug-bar">
@@ -235,7 +236,7 @@ function LearningChart({ history }: { history: HourLog[] }) {
       </p>
     );
   }
-  const data = history.map((h, i) => ({ i: i + 1, label: h.label, setpoint: h.setpointC, room: Number(h.roomC.toFixed(1)), want: h.wantC }));
+  const data = history.map((h, i) => ({ i: i + 1, label: h.label, setpoint: Number(toF(h.setpointC).toFixed(1)), room: Number(toF(h.roomC).toFixed(1)), want: h.wantC === null ? null : Number(toF(h.wantC).toFixed(1)) }));
   const weekStarts = history
     .map((h, i) => ({ i: i + 1, week: h.label.split(" · ")[0] ?? "" }))
     .filter((p, k, all) => k > 0 && p.week !== all[k - 1]?.week);
@@ -279,7 +280,7 @@ function GroupCards({ groups, currentGid }: { groups: KnownGroup[]; currentGid: 
             {DAYS[g.weekday]} {String(g.startHour).padStart(2, "0")}:00 · ~{Math.round(g.size)} people
           </span>
           <span>
-            {g.offsetC === 0 ? "no taste learned yet" : `${signed(g.offsetC)}°C vs the curve`} · {g.weeks.length} week
+            {g.offsetC === 0 ? "no taste learned yet" : `${signedF(g.offsetC)} vs the curve`} · {g.weeks.length} week
             {g.weeks.length === 1 ? "" : "s"}
           </span>
         </li>
@@ -314,7 +315,7 @@ function EnergyView({ history, totals, result }: { history: HourLog[]; totals: E
     <div className="model-split">
       <div className="energy-totals">
         <div className="energy-hero">
-          <span>{counting ? `${save ? "Saved" : "Extra"} vs AC fixed at ${BASELINE_AC_C}°C · ${totals.hours} h` : `This hour vs AC fixed at ${BASELINE_AC_C}°C · press Next hour to count`}</span>
+          <span>{counting ? `${save ? "Saved" : "Extra"} vs AC fixed at ${fmtF(BASELINE_AC_C)} · ${totals.hours} h` : `This hour vs AC fixed at ${fmtF(BASELINE_AC_C)} · press Next hour to count`}</span>
           <strong className={save ? "save" : "spend"}>
             {Math.abs(saved).toFixed(1)} kWh <small>{save ? "−" : "+"}{Math.abs(pct).toFixed(0)}%</small>
           </strong>
@@ -324,11 +325,11 @@ function EnergyView({ history, totals, result }: { history: HourLog[]; totals: E
           </span>
         </div>
         <p className="model-hint">
-          This hour: AC {result.targetC.toFixed(1)}°C is {Math.abs(delta).toFixed(1)}°C {delta >= 0 ? "warmer" : "cooler"} than {BASELINE_AC_C}°C, so cooling uses{" "}
+          This hour: AC {fmtF(result.targetC)} is {fmtDeltaF(delta)} {delta >= 0 ? "warmer" : "cooler"} than {fmtF(BASELINE_AC_C)}, so cooling uses{" "}
           {Math.abs(hourPct).toFixed(0)}% {hourPct >= 0 ? "less" : "more"}. More people means more heat to remove, so each degree is worth more kWh.
         </p>
         <p className="energy-source">
-          About 10% less cooling per 1°C warmer (Hoyt et al. 2015: 22.2→25°C saved 29%). 117 W per seated person (ASHRAE). COP 3, 0.4 kg CO₂e/kWh. Bills: LADWP R-1A 2026, every two months (Bills tab).
+          About 10% less cooling per 1.8°F warmer (Hoyt et al. 2015: 72→77°F saved 29%). 117 W per seated person (ASHRAE). COP 3, 0.4 kg CO₂e/kWh. Bills: LADWP R-1A 2026, every two months (Bills tab).
         </p>
       </div>
       {data.length ? (
@@ -339,7 +340,7 @@ function EnergyView({ history, totals, result }: { history: HourLog[]; totals: E
               <XAxis dataKey="day" tick={axisTick} tickLine={false} axisLine={false} />
               <YAxis tick={axisTick} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={(_, payload) => String(payload?.[0]?.payload?.label ?? "")} />
-              <Bar dataKey="fixed" name={`AC at ${BASELINE_AC_C}°C`} fill="var(--line-strong)" isAnimationActive={false} />
+              <Bar dataKey="fixed" name={`AC at ${fmtF(BASELINE_AC_C)}`} fill="var(--line-strong)" isAnimationActive={false} />
               <Bar dataKey="model" name="Model" fill="var(--cold)" isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
@@ -361,7 +362,7 @@ function BillsView({ totals }: { totals: EnergyTotals }) {
         <thead>
           <tr>
             <th scope="col">Bill</th>
-            <th scope="col">Fixed {BASELINE_AC_C}°C</th>
+            <th scope="col">Fixed {fmtF(BASELINE_AC_C)}</th>
             <th scope="col">Model</th>
             <th scope="col">Saved</th>
           </tr>

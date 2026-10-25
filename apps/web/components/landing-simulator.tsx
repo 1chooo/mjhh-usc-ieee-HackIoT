@@ -12,6 +12,7 @@ import { IMPACT_SPANS } from "../lib/scale-savings";
 import { evaluate, type Scenario } from "../lib/thermal";
 import styles from "./landing-simulator.module.css";
 import { ScaleStory } from "./scale-story";
+import { fmtF, fromF, toF } from "../lib/units";
 
 const presets = [
   simulatorPresets.find((preset) => preset.id === "overcooled-lecture")!,
@@ -100,7 +101,7 @@ export function LandingSimulator() {
         <div className={styles.workspace}>
           <div className={styles.roomPanel}>
             <div className={styles.roomReadings}>
-              <span>{scenario.indoorC.toFixed(1)}°C indoors</span>
+              <span>{fmtF(scenario.indoorC)} indoors</span>
               <span>{scenario.humidityPct}% humidity</span>
             </div>
             <RoomDiagram
@@ -130,12 +131,12 @@ export function LandingSimulator() {
               />
               <RangeControl
                 label="Outdoors"
-                value={scenario.outdoorC}
-                min={0}
-                max={40}
-                step={0.5}
-                unit="°C"
-                onChange={(outdoorC) => patch({ outdoorC })}
+                value={Number(toF(scenario.outdoorC).toFixed(0))}
+                min={32}
+                max={104}
+                step={1}
+                unit="°F"
+                onChange={(f) => patch({ outdoorC: fromF(f) })}
               />
               <RangeControl
                 label="Too hot"
@@ -171,16 +172,16 @@ export function LandingSimulator() {
               <div className={styles.policy}>
                 <h3>Traditional</h3>
                 <strong className={styles.temperature}>
-                  {result.baselineSetpointC.toFixed(1)}
-                  <span>°C</span>
+                  {toF(result.baselineSetpointC).toFixed(1)}
+                  <span>°F</span>
                 </strong>
                 <p>Fixed temperature</p>
               </div>
               <div className={`${styles.policy} ${styles.adaptive}`}>
                 <h3>Our model</h3>
                 <strong className={styles.temperature}>
-                  {result.targetC.toFixed(1)}
-                  <span>°C</span>
+                  {toF(result.targetC).toFixed(1)}
+                  <span>°F</span>
                 </strong>
                 <p>
                   {!scenario.scheduledOpen

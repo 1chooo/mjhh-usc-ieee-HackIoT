@@ -1,5 +1,6 @@
 import { RoomModel, type Decision } from "./ac-model";
 import { evaluate, type Factor, type HvacAction, type Scenario, type ThermalResult } from "./thermal";
+import { fmtDeltaF, fmtF, signedF } from "./units";
 
 /** Reference room temperature for the cooling-load estimate. */
 export const FIXED_SETPOINT_C = 24;
@@ -117,12 +118,12 @@ export function evaluateWithModel(s: Scenario, room: RoomModel, at: string): Mod
     ? [
         {
           name: "People",
-          detail: `${people} people need about ${decision.curveC.toFixed(1)}°C on the AC before anyone votes. The curve starts at 26°C for one person and 18°C for 300, and is re-fitted after every vote.`,
+          detail: `${people} people need about ${fmtF(decision.curveC, 1)} on the AC before anyone votes. The curve starts at ${fmtF(26)} for one person and ${fmtF(18)} for 300, and is re-fitted after every vote.`,
         },
         {
           name: "Group",
           detail: g
-            ? `G${String(g.gid).padStart(2, "0")}: about ${Math.round(g.size)} people who start ${DAYS[g.weekday]} ${String(g.startHour).padStart(2, "0")}:00, seen in ${g.weeks.length} week${g.weeks.length === 1 ? "" : "s"}. Their learned taste is ${signed(decision.offsetC)}°C.`
+            ? `G${String(g.gid).padStart(2, "0")}: about ${Math.round(g.size)} people who start ${DAYS[g.weekday]} ${String(g.startHour).padStart(2, "0")}:00, seen in ${g.weeks.length} week${g.weeks.length === 1 ? "" : "s"}. Their learned taste is ${signedF(decision.offsetC)}.`
             : "Under 15 people is a drop-in hour. No group taste applies.",
         },
         {
@@ -131,15 +132,15 @@ export function evaluateWithModel(s: Scenario, room: RoomModel, at: string): Mod
             ? "Nobody voted, so the AC holds."
             : hot === cold
               ? `${hot} hot and ${cold} cold is balanced, so the AC holds.`
-              : `${hot} hot and ${cold} cold. Majority rule asks for ${signed(decision.correctionC)}°C.`,
+              : `${hot} hot and ${cold} cold. Majority rule asks for ${signedF(decision.correctionC)}.`,
         },
         {
           name: "Decision",
-          detail: `Start of the hour ${decision.startC.toFixed(1)}°C, after the vote ${decision.setpointC.toFixed(1)}°C. The AC moves only the way the vote points, and only when the change is at least 0.5°C.`,
+          detail: `Start of the hour ${fmtF(decision.startC, 1)}, after the vote ${fmtF(decision.setpointC, 1)}. The AC moves only the way the vote points, and only when the change is at least ${fmtDeltaF(0.5)}.`,
         },
         {
           name: "Room",
-          detail: `With ${people} people the room settles near ${roomAfterC.toFixed(1)}°C.`,
+          detail: `With ${people} people the room settles near ${fmtF(roomAfterC, 1)}.`,
         },
         {
           name: "Learning",
@@ -147,13 +148,13 @@ export function evaluateWithModel(s: Scenario, room: RoomModel, at: string): Mod
           detail: `Remembers ${decision.learnedHours - 1} earlier hour${decision.learnedHours === 2 ? "" : "s"} of votes in this room (it keeps the last six weeks).`,
         },
       ]
-    : [{ name: "Closed", detail: `The room is closed, so votes are ignored and the AC sets back to ${SETBACK_C}°C.` }];
+    : [{ name: "Closed", detail: `The room is closed, so votes are ignored and the AC sets back to ${fmtF(SETBACK_C)}.` }];
 
   const summary = !s.scheduledOpen
-    ? `The room is closed, so the AC sets back to ${SETBACK_C}°C.`
+    ? `The room is closed, so the AC sets back to ${fmtF(SETBACK_C)}.`
     : hot + cold === 0 || hot === cold
-      ? `Votes are balanced or absent, so the AC stays at ${targetC.toFixed(1)}°C.`
-      : `${hot > cold ? "Hot" : "Cold"} votes lead, so the AC moves to ${targetC.toFixed(1)}°C.`;
+      ? `Votes are balanced or absent, so the AC stays at ${fmtF(targetC, 1)}.`
+      : `${hot > cold ? "Hot" : "Cold"} votes lead, so the AC moves to ${fmtF(targetC, 1)}.`;
 
   return {
     ...base,

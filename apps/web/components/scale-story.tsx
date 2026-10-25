@@ -151,7 +151,7 @@ export function ScaleStory({
       <div className={styles.foot}>
         <p>
           Per room: {sampleRoom.name} ({sampleRoom.building}) from the simulator, its next 8 weeks
-          averaged per day, priced as LADWP two-month bills, against an AC fixed at 22°C. Estimates,
+          averaged per day, priced as LADWP two-month bills, against an AC fixed at 71.6°F. Estimates,
           not measured building savings.
         </p>
         <Link className="text-link" href="/impact">

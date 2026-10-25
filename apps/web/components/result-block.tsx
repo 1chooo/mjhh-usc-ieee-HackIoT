@@ -1,4 +1,5 @@
 import { energyDeltaLabel, type ThermalResult } from "../lib/thermal";
+import { fmtF } from "../lib/units";
 
 export function ResultBlock({ result }: { result: ThermalResult }) {
   const savedClass =
@@ -10,15 +11,15 @@ export function ResultBlock({ result }: { result: ThermalResult }) {
       <dl className="stat-grid">
         <div>
           <dt>Feels like</dt>
-          <dd>{result.perceivedC.toFixed(1)}°C</dd>
+          <dd>{fmtF(result.perceivedC)}</dd>
         </div>
         <div>
           <dt>Setpoint</dt>
-          <dd>{result.targetC.toFixed(1)}°C</dd>
+          <dd>{fmtF(result.targetC)}</dd>
         </div>
         <div>
           <dt>Fixed</dt>
-          <dd>{result.baselineSetpointC.toFixed(1)}°C</dd>
+          <dd>{fmtF(result.baselineSetpointC)}</dd>
         </div>
         <div>
           <dt>Difference</dt>

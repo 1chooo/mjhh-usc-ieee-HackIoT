@@ -7,6 +7,7 @@ import { furnish, roomFootprint, type PersonVote } from "./layout";
 import { People } from "./people";
 import { bindPick } from "./pick";
 import type { SensorKind, SimPick } from "./sim-types";
+import { toF } from "../../lib/units";
 
 export function Room({
   scenario,
@@ -211,7 +212,7 @@ function Sensors({
   }[] = [
     {
       kind: "temperature",
-      value: `${scenario.indoorC.toFixed(1)}°`,
+      value: `${toF(scenario.indoorC).toFixed(1)}°`,
       position: [-width / 2 + 0.28, 1.5, depth * 0.12],
     },
     {
@@ -226,7 +227,7 @@ function Sensors({
     },
     {
       kind: "outdoor",
-      value: `${scenario.outdoorC.toFixed(1)}°`,
+      value: `${toF(scenario.outdoorC).toFixed(1)}°`,
       position: [width * 0.2, 1.6, depth / 2 - 0.28],
     },
   ];
