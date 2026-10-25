@@ -1,3 +1,5 @@
+import { fmtDeltaF, fmtF, toF } from "./units";
+
 export type SpaceKind = "library" | "classroom";
 
 export type HvacAction = "heat" | "cool" | "hold";
@@ -174,7 +176,7 @@ export function evaluate(input: Scenario): ThermalResult {
   const factors: Factor[] = [
     {
       name: "Space type",
-      detail: `${kindLabel} comfort band is ${band.lowC.toFixed(0)}–${band.highC.toFixed(0)}°C. A library sits warmer because people stay still. A classroom sits cooler.`,
+      detail: `${kindLabel} comfort band is ${toF(band.lowC).toFixed(0)}–${fmtF(band.highC, 0)}. A library sits warmer because people stay still. A classroom sits cooler.`,
     },
     {
       name: "Schedule and occupancy",
@@ -189,28 +191,28 @@ export function evaluate(input: Scenario): ThermalResult {
       detail:
         !peoplePresent || totalVotes === 0
           ? "No vote is moving the setpoint."
-          : `${Math.round(scenario.hotVotes)} hot and ${Math.round(scenario.coldVotes)} cold. Full influence needs ${Math.ceil(voteQuorum)} votes from the ${Math.round(scenario.occupancy)} people here, so this shift is ${Math.round(voteTrust * 100)}% of ${scenario.voteInfluenceC.toFixed(1)}°C.`,
+          : `${Math.round(scenario.hotVotes)} hot and ${Math.round(scenario.coldVotes)} cold. Full influence needs ${Math.ceil(voteQuorum)} votes from the ${Math.round(scenario.occupancy)} people here, so this shift is ${Math.round(voteTrust * 100)}% of ${fmtDeltaF(scenario.voteInfluenceC)}.`,
     },
     {
       name: "Humidity",
       detail:
         humidityLiftC === 0
           ? `${Math.round(scenario.humidityPct)}% relative humidity is under 55%, so it does not change the feel of the room.`
-          : `${Math.round(scenario.humidityPct)}% relative humidity adds ${humidityLiftC.toFixed(1)}°C. The model treats the room as ${perceivedC.toFixed(1)}°C.`,
+          : `${Math.round(scenario.humidityPct)}% relative humidity adds ${fmtDeltaF(humidityLiftC)}. The model treats the room as ${fmtF(perceivedC, 1)}.`,
     },
     {
       name: "Outdoor temperature",
-      detail: `${scenario.outdoorC.toFixed(1)}°C is ${season === "cooling" ? "at or above" : "below"} the ${midpointC.toFixed(1)}°C band middle, so this hour is ${season}.`,
+      detail: `${fmtF(scenario.outdoorC, 1)} is ${season === "cooling" ? "at or above" : "below"} the ${fmtF(midpointC, 1)} band middle, so this hour is ${season}.`,
     },
     {
       name: "People and the envelope",
-      detail: `Bodies add ${adaptive.peopleKw.toFixed(2)} kW. Holding ${targetC.toFixed(1)}°C against the outdoors is an envelope load of ${adaptive.envelopeKw.toFixed(2)} kW. HVAC covers the difference.`,
+      detail: `Bodies add ${adaptive.peopleKw.toFixed(2)} kW. Holding ${fmtF(targetC, 1)} against the outdoors is an envelope load of ${adaptive.envelopeKw.toFixed(2)} kW. HVAC covers the difference.`,
     },
     {
       name: "Deadband",
       detail: drifting
-        ? `Perceived ${perceivedC.toFixed(1)}°C is outside ${heatSetpointC.toFixed(1)}–${coolSetpointC.toFixed(1)}°C, and the outdoor air will move it back. The live call is hold.`
-        : `Perceived ${perceivedC.toFixed(1)}°C against heat ${heatSetpointC.toFixed(1)}°C and cool ${coolSetpointC.toFixed(1)}°C. The live call is ${action}.`,
+        ? `Perceived ${fmtF(perceivedC, 1)} is outside ${toF(heatSetpointC).toFixed(1)}–${fmtF(coolSetpointC)}, and the outdoor air will move it back. The live call is hold.`
+        : `Perceived ${fmtF(perceivedC, 1)} against heat ${fmtF(heatSetpointC, 1)} and cool ${fmtF(coolSetpointC, 1)}. The live call is ${action}.`,
     },
   ];
 
@@ -250,23 +252,23 @@ function summaryFor(input: {
   midpointC: number;
   action: HvacAction;
 }): string {
-  const target = input.targetC.toFixed(1);
+  const target = fmtF(input.targetC);
   const call = `The live call is ${input.action}.`;
   if (!input.peoplePresent) {
     const why = input.scheduledOpen
       ? "The room is empty"
       : "The room is closed";
-    return `${why}, so the setpoint sets back to ${target}°C instead of ${input.midpointC.toFixed(1)}°C. ${call}`;
+    return `${why}, so the setpoint sets back to ${target} instead of ${fmtF(input.midpointC, 1)}. ${call}`;
   }
   if (input.hotVotes + input.coldVotes === 0) {
-    return `Nobody has voted, so the setpoint stays at ${target}°C. ${call}`;
+    return `Nobody has voted, so the setpoint stays at ${target}. ${call}`;
   }
   if (input.hotVotes === input.coldVotes) {
-    return `Votes are split, so the setpoint stays near ${target}°C. ${call}`;
+    return `Votes are split, so the setpoint stays near ${target}. ${call}`;
   }
   const lean =
     input.hotVotes > input.coldVotes ? "Hot votes lead" : "Cold votes lead";
-  return `${lean}, so the setpoint moves to ${target}°C. ${call}`;
+  return `${lean}, so the setpoint moves to ${target}. ${call}`;
 }
 
 export function energyDeltaLabel(savedKwh: number): string {
@@ -288,7 +290,7 @@ export function savingsCopy(result: ThermalResult): string {
     return `A fixed setpoint and this policy both use about ${base} kWh ${hours}.`;
   }
   if (result.savedKwh > 0) {
-    return `A fixed ${result.baselineSetpointC.toFixed(1)}°C setpoint would use ${base} kWh ${hours}. This policy would use ${next} kWh. That saves ${result.savedKwh.toFixed(2)} kWh (${Math.round(result.savedPct)}%).`;
+    return `A fixed ${fmtF(result.baselineSetpointC, 1)} setpoint would use ${base} kWh ${hours}. This policy would use ${next} kWh. That saves ${result.savedKwh.toFixed(2)} kWh (${Math.round(result.savedPct)}%).`;
   }
-  return `A fixed ${result.baselineSetpointC.toFixed(1)}°C setpoint would use ${base} kWh ${hours}. This policy would use ${next} kWh. That is ${Math.abs(result.savedKwh).toFixed(2)} kWh more, spent on comfort.`;
+  return `A fixed ${fmtF(result.baselineSetpointC, 1)} setpoint would use ${base} kWh ${hours}. This policy would use ${next} kWh. That is ${Math.abs(result.savedKwh).toFixed(2)} kWh more, spent on comfort.`;
 }

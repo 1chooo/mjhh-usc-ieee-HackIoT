@@ -1,6 +1,7 @@
 import type { Vote } from "../../lib/campus";
 import type { RoomSnapshot } from "../../lib/campus-summary";
 import { ResultBlock, VoteMeter } from "../result-block";
+import { fmtF } from "../../lib/units";
 
 export function RoomDetail({
   room,
@@ -30,11 +31,11 @@ export function RoomDetail({
       <dl className="stat-grid">
         <div>
           <dt>Indoor</dt>
-          <dd>{reading.indoorC.toFixed(1)}°C</dd>
+          <dd>{fmtF(reading.indoorC)}</dd>
         </div>
         <div>
           <dt>Outside</dt>
-          <dd>{reading.outdoorC.toFixed(1)}°C</dd>
+          <dd>{fmtF(reading.outdoorC)}</dd>
         </div>
         <div>
           <dt>Humidity</dt>

@@ -1,6 +1,7 @@
 import { energyDeltaLabel } from "../../lib/thermal";
 import { deltaTone, type RoomSnapshot } from "../../lib/campus-summary";
 import { ActionBadge } from "./action-badge";
+import { fmtF } from "../../lib/units";
 
 export function MetricRooms({
   rooms,
@@ -44,7 +45,7 @@ export function MetricRooms({
                 </span>
                 <span className="metric-cell">
                   <span className="metric-label">Indoor</span>
-                  {room.reading.indoorC.toFixed(1)}°C
+                  {fmtF(room.reading.indoorC)}
                 </span>
                 <span className="metric-cell">
                   <span className="metric-label">People</span>

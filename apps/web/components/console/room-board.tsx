@@ -13,6 +13,7 @@ import {
 import { useLiveRoom } from "../../lib/use-live-room";
 import { Card, CardContent } from "../ui/card";
 import { StatGrid } from "./stat-grid";
+import { fmtF, toF } from "../../lib/units";
 
 const tooltipStyle = {
   background: "var(--card)",
@@ -25,7 +26,7 @@ const axisTick = { fill: "var(--muted)", fontSize: 12 };
 const grid = "var(--line)";
 
 function formatTemp(tempC: number | null): string {
-  return tempC == null ? "—" : `${tempC.toFixed(1)}°C`;
+  return tempC == null ? "—" : fmtF(tempC);
 }
 
 function formatWhen(iso: string): string {
@@ -41,7 +42,7 @@ export function RoomBoard() {
   const { room, error } = useLiveRoom();
   const points = [...(room?.history ?? [])].reverse().map((row) => ({
     at: row.created_at,
-    temp: row.temp_c,
+    temp: row.temp_c == null ? null : Number(toF(row.temp_c).toFixed(1)),
     people: row.ppl,
   }));
 
@@ -69,7 +70,7 @@ export function RoomBoard() {
               {
                 label: "Setpoint",
                 value: room.setpoint
-                  ? `${room.setpoint.target_c.toFixed(1)}°C`
+                  ? fmtF(room.setpoint.target_c)
                   : "—",
               },
               {
@@ -109,7 +110,7 @@ export function RoomBoard() {
                   <Line
                     yAxisId="temp"
                     dataKey="temp"
-                    name="°C"
+                    name="°F"
                     stroke="var(--ink)"
                     strokeWidth={2}
                     dot={false}

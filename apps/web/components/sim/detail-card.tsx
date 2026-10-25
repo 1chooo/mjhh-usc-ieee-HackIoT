@@ -3,6 +3,7 @@
 import type { Scenario } from "../../lib/thermal";
 import type { PersonVote } from "./layout";
 import type { SensorKind, SimPick } from "./sim-types";
+import { fmtF } from "../../lib/units";
 
 const sensorName: Record<SensorKind, string> = {
   temperature: "Temperature",
@@ -90,12 +91,12 @@ function SensorDetail({
 }) {
   const value =
     sensor === "temperature"
-      ? `${scenario.indoorC.toFixed(1)} °C`
+      ? fmtF(scenario.indoorC)
       : sensor === "humidity"
         ? `${Math.round(scenario.humidityPct)}%`
         : sensor === "occupancy"
           ? String(Math.round(scenario.occupancy))
-          : `${scenario.outdoorC.toFixed(1)} °C`;
+          : fmtF(scenario.outdoorC);
   return (
     <>
       <p className="eyebrow">{sensorName[sensor]}</p>
