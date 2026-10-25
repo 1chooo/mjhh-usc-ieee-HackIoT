@@ -1,8 +1,9 @@
 import type { Reading } from "../../lib/campus";
 import type { Scenario, ThermalResult } from "../../lib/thermal";
 import type { PersonVote } from "./layout";
+import type { FleetShape } from "./fleet";
 
-export type SimMode = "room" | "campus";
+export type SimMode = "room" | "campus" | "fleet";
 
 export type SensorKind = "temperature" | "humidity" | "occupancy" | "outdoor";
 
@@ -19,4 +20,5 @@ export type SimCanvasProps = {
   selected: SimPick | null;
   onSelect: (pick: SimPick | null) => void;
   onSelectSpace: (spaceId: string) => void;
+  fleet: FleetShape;
 };

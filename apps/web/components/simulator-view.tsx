@@ -1,15 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { type Scenario } from "../lib/thermal";
 import { RoomModel } from "../lib/ac-model";
 import {
   evaluateWithModel,
-  BASELINE_AC_C,
-  SETBACK_C,
-  hourKwh,
-  roomAtC,
   shiftClock,
   simulatedVotes,
 } from "../lib/model-sim";
@@ -17,16 +13,15 @@ import {
   classAt,
   classInWeek,
   classLabel,
-  classStartAt,
   firstClassAt,
-  getSimRoom,
   scenarioFor,
+  getSimRoom,
   simRooms,
-  weekLabel,
-  type SimRoom,
 } from "../lib/sim-rooms";
 import { ModelPanel, type HourLog, type KnownGroup } from "./sim/model-panel";
 import { addHour, NO_TOTALS, type EnergyTotals } from "../lib/billing";
+import { arrival, clockText, dailySavingsUsd, step } from "../lib/sim-run";
+import { roomFootprint } from "./sim/layout";
 import {
   activePersonVotes,
   castPersonVote,
@@ -57,39 +52,6 @@ const UNTRAINED = new RoomModel();
 const HISTORY_HOURS = 24 * 7;
 
 type Track = { room: RoomModel; at: string; history: HourLog[]; totals: EnergyTotals };
-
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const round1 = (v: number) => Number(v.toFixed(1));
-const noVotes = { hotVotes: 0, coldVotes: 0 };
-
-function clockText(at: string): string {
-  const day = (new Date(`${at.slice(0, 10)}T00:00Z`).getUTCDay() + 6) % 7;
-  return `${weekLabel(at)} · ${DAY_NAMES[day]} ${at.slice(11, 16)}`;
-}
-
-/**
- * The room at `at`: this hour's class walks in and the AC is at what the model plans for
- * them. Outdoor, humidity and the heat sliders carry over from `keep`.
- */
-function arrival(def: SimRoom, model: RoomModel, at: string, keep: Scenario | null, autoVotes: boolean) {
-  const k = classAt(def, at);
-  const fresh = scenarioFor(def, k, 24);
-  const base: Scenario = keep
-    ? {
-        ...fresh,
-        outdoorC: keep.outdoorC,
-        humidityPct: keep.humidityPct,
-        wattsPerPerson: keep.wattsPerPerson,
-        lossWPerM2K: keep.lossWPerM2K,
-        hours: keep.hours,
-      }
-    : fresh;
-  const startC = model.preview(base.occupancy, 0, 0, at).startC;
-  const indoorC = round1(roomAtC(startC, base));
-  const wantC = k?.prefersC ?? 24;
-  const votes = autoVotes ? simulatedVotes(indoorC, wantC, base.occupancy) : noVotes;
-  return { scenario: { ...base, indoorC, ...votes }, wantC };
-}
 
 const firstRoom = simRooms[0]!;
 const opening = arrival(firstRoom, UNTRAINED, firstClassAt(firstRoom), null, true);
@@ -189,6 +151,33 @@ export function SimulatorView() {
   const knownGroups: KnownGroup[] = model.groups.map((g) => ({ ...g, offsetC: model.offsetFor(g.gid) }));
   const nowClass = classAt(roomDef, clockAt);
 
+  // Scale-up: one room's daily saving, times the number of rooms, times the days.
+  const [fleetRooms, setFleetRooms] = useState("");
+  const [fleetDays, setFleetDays] = useState("30");
+  const roomsN = Math.max(0, Math.floor(Number(fleetRooms) || 0));
+  const daysN = Math.max(0, Number(fleetDays) || 0);
+  const { outdoorC, humidityPct, wattsPerPerson, lossWPerM2K } = scenario;
+  // The projection runs 8 weeks of hours (about a second), so only while the fleet is on screen.
+  const scaling = roomsN > 0 && mode === "fleet";
+  const perRoomDay = useMemo(() => {
+    if (!scaling) {
+      return null;
+    }
+    const keep = { ...scenarioFor(roomDef, null, 24), outdoorC, humidityPct, wattsPerPerson, lossWPerM2K };
+    return dailySavingsUsd(roomDef, track?.room ?? UNTRAINED, track?.at ?? firstClassAt(roomDef), keep);
+  }, [scaling, roomDef, track, outdoorC, humidityPct, wattsPerPerson, lossWPerM2K]);
+  const fleetTotal = perRoomDay === null ? null : perRoomDay * roomsN * daysN;
+  const footprint = roomFootprint(roomDef.floorAreaM2, roomDef.kind);
+  const fleetShape = {
+    count: Math.max(1, roomsN),
+    kind: roomDef.kind,
+    width: footprint.width,
+    depth: footprint.depth,
+    people: scenario.scheduledOpen ? scenario.occupancy : 0,
+    hotVotes: scenario.hotVotes,
+    coldVotes: scenario.coldVotes,
+  };
+
   function trackFor(id: string): Track {
     return tracks[id] ?? { room: new RoomModel(), at: firstClassAt(getSimRoom(id) ?? firstRoom), history: [], totals: NO_TOTALS };
   }
@@ -200,47 +189,6 @@ export function SimulatorView() {
     showRef.current(next.scenario);
   }
 
-  /** Let the model learn from the hour at `at` with the room as `s` shows it. */
-  function commit(room: RoomModel, s: Scenario, at: string, want: number | null) {
-    const open = s.scheduledOpen;
-    const hot = open ? Math.round(s.hotVotes) : 0;
-    const cold = open ? Math.round(s.coldVotes) : 0;
-    const d = room.update(open ? s.occupancy : 0, hot, cold, at);
-    const setpointC = open ? d.setpointC : SETBACK_C;
-    const roomC = roomAtC(setpointC, s);
-    const log: HourLog = {
-      at,
-      label: clockText(at),
-      people: Math.round(s.occupancy),
-      hot,
-      cold,
-      setpointC,
-      roomC,
-      wantC: want,
-      group: !open ? "empty" : d.group ? `G${String(d.group.gid).padStart(2, "0")}` : "drop-in",
-      className: classAt(roomDef, at)?.name ?? "No class",
-      fixedKwh: hourKwh(roomAtC(BASELINE_AC_C, s), s),
-      modelKwh: hourKwh(roomC, s),
-    };
-    return { log, roomC };
-  }
-
-  /**
-   * The model learns from the hour at `at`, then the clock moves on one hour. The class goes on
-   * (votes follow the new room temperature), the next class walks in, or the room is empty
-   * and the AC sets back.
-   */
-  function step(room: RoomModel, s: Scenario, at: string, want: number) {
-    const { log, roomC } = commit(room, s, at, autoVotes ? want : null);
-    const k = classAt(roomDef, at);
-    const nextAt = shiftClock(at, 1);
-    const sameClass = k !== null && classAt(roomDef, nextAt)?.id === k.id;
-    const next = sameClass
-      ? { scenario: { ...s, indoorC: round1(roomC), ...(autoVotes ? simulatedVotes(roomC, want, s.occupancy) : noVotes) }, wantC: want }
-      : arrival(roomDef, room, nextAt, s, autoVotes);
-    return { log, nextAt, next };
-  }
-
   function save(t: Track, at: string, logs: HourLog[]) {
     const totals = logs.reduce((sum, h) => addHour(sum, h.at, h.fixedKwh, h.modelKwh), t.totals);
     setTracks({ ...tracks, [spaceId]: { room: t.room, at, history: [...t.history, ...logs].slice(-HISTORY_HOURS), totals } });
@@ -248,7 +196,7 @@ export function SimulatorView() {
 
   function nextHour() {
     const t = trackFor(spaceId);
-    const { log, nextAt, next } = step(t.room, scenarioRef.current, t.at, wantC);
+    const { log, nextAt, next } = step(roomDef, t.room, scenarioRef.current, t.at, wantC, autoVotes);
     save(t, nextAt, [log]);
     showArrival(next);
   }
@@ -260,7 +208,7 @@ export function SimulatorView() {
     let current = { scenario: scenarioRef.current, wantC };
     const logs: HourLog[] = [];
     for (let h = 0; h < 24 * 7; h++) {
-      const r = step(t.room, current.scenario, at, current.wantC);
+      const r = step(roomDef, t.room, current.scenario, at, current.wantC, autoVotes);
       logs.push(r.log);
       at = r.nextAt;
       current = r.next;
@@ -514,6 +462,7 @@ export function SimulatorView() {
           selected={pick}
           onSelect={setPick}
           onSelectSpace={openSpace}
+          fleet={fleetShape}
         />
       </div>
       <div className="sim-overlay" ref={overlayRef}>
@@ -602,14 +551,59 @@ export function SimulatorView() {
             </label>
           </div>
         </div>
-        <button
-          type="button"
-          className="ghost sim-factors"
-          aria-expanded={factorsOpen}
-          onClick={() => setFactorsOpen((open) => !open)}
-        >
-          {factorsOpen ? "Hide factors" : "Factors"}
-        </button>
+        <div className="sim-corner">
+          <div className="sim-scale" role="group" aria-label="Savings: per room per day × rooms × days">
+            <span className="sim-scale-rate" title="Average saved per room per day">
+              {perRoomDay === null ? "$—" : usd(perRoomDay)}
+              <small>/day</small>
+            </span>
+            <span aria-hidden="true">×</span>
+            <label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                placeholder="0"
+                aria-label="Rooms"
+                value={fleetRooms}
+                onFocus={() => roomsN > 0 && showMode("fleet")}
+                onChange={(event) => {
+                  setFleetRooms(event.target.value);
+                  if (Number(event.target.value) > 0) {
+                    showMode("fleet");
+                  }
+                }}
+              />
+              <small>rooms</small>
+            </label>
+            <span aria-hidden="true">×</span>
+            <label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                aria-label="Days"
+                value={fleetDays}
+                onChange={(event) => setFleetDays(event.target.value)}
+              />
+              <small>days</small>
+            </label>
+            <span aria-hidden="true">=</span>
+            <output className={fleetTotal !== null && fleetTotal < 0 ? "spend" : "save"} aria-live="polite">
+              {usd(fleetTotal ?? 0)}
+            </output>
+          </div>
+          <button
+            type="button"
+            className="ghost sim-factors"
+            aria-expanded={factorsOpen}
+            onClick={() => setFactorsOpen((open) => !open)}
+          >
+            {factorsOpen ? "Hide factors" : "Factors"}
+          </button>
+        </div>
         <div className="sim-dock" ref={dockRef}>
           {pick ? (
             <DetailCard
@@ -640,7 +634,7 @@ export function SimulatorView() {
                 onNextWeek={nextWeek}
                 onReset={resetModel}
               />
-            ) : (
+            ) : mode === "fleet" ? null : (
               <div className="result-card">
                 <ResultBlock result={result} />
               </div>
@@ -807,6 +801,9 @@ function settle(input: Scenario): Scenario {
   }
   return { ...input, capacity, occupancy, hotVotes, coldVotes };
 }
+
+const usd = (v: number) =>
+  `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function Slider({
   label,
