@@ -11,20 +11,30 @@ const MAX_BUILDINGS = 36;
 /** People drawn at most, across the open top floors. */
 const MAX_PEOPLE = 24000;
 
-const ROOMS_PER_SIDE = 8; // a floor: a corridor with up to 8 classrooms on each side
-const MAX_FLOORS = 5;
+const ROOMS_PER_SIDE = 6; // a floor: a corridor with up to 6 classrooms on each side
+/** Floors each building may have (two to five), in turn, so low and tall buildings stand side by side. */
+const FLOOR_PLAN = [5, 3, 4, 2, 5, 4, 3];
 const FLOOR_HEIGHT = 3.2;
 const WALL_HEIGHT = 1.1; // the open top floor keeps low walls, so the rooms read from above
 const WALL = 0.14;
 const CORRIDOR = 3.2;
-const WALK = 6; // between a building and its quad's lawn
+const SLAB = 0.15; // the open top floor's slab; its rooms stand on it, clear of the facade below
 const STREET = 14; // between quads
+const PLAZA = 12; // a lone small building gets a plaza in front instead of a quad
+const MIN_COURT = 16; // a courtyard narrower than this is no lawn: build the small layout instead
 
-// USC look: red brick, cream trim and arcades, terracotta roof edges, lawns and palms.
-const brick = "#a65a43";
-const cream = "#ebe0c9";
-const terracotta = "#b8603d";
-const glass = "#3f4b56";
+// USC look: brick or stone, cream trim and arcades, terracotta roof edges, lawns and palms.
+// Four building styles so a big campus isn't one building copied; each building gets one.
+type Style = { wall: string; trim: string; roof: string; glass: string; arcade: boolean; band: boolean; feature: "pavilion" | "turrets" | "none" };
+const STYLES: Style[] = [
+  { wall: "#a65a43", trim: "#ebe0c9", roof: "#b8603d", glass: "#3f4b56", arcade: true, band: false, feature: "pavilion" }, // red brick
+  { wall: "#cbb08b", trim: "#f2e8d3", roof: "#b8603d", glass: "#4a4f55", arcade: true, band: false, feature: "turrets" }, // sandstone
+  { wall: "#80402f", trim: "#e3d5bb", roof: "#5d6168", glass: "#2f3a44", arcade: false, band: false, feature: "turrets" }, // dark brick, slate
+  { wall: "#cfccc5", trim: "#9aa3a8", roof: "#7c8288", glass: "#5f7d91", arcade: false, band: true, feature: "none" }, // modern concrete and glass
+];
+const towerBrick = "#a65a43";
+const towerTrim = "#ebe0c9";
+const towerCap = "#b8603d";
 const lawn = "#88a75c";
 const path = "#e2d5bb";
 const trunk = "#8b7660";
@@ -51,9 +61,10 @@ export type FleetShape = {
 
 /** A top-floor room: centre, floor height, and which way it faces. */
 type Spot = { x: number; y: number; z: number; yaw: number };
-type Building = { x: number; z: number; yaw: number; floors: number };
-type Quad = { x: number; z: number; floors: number };
-type Box = { x: number; y: number; z: number; sx: number; sy: number; sz: number; yaw?: number };
+type Building = { x: number; z: number; yaw: number; floors: number; style: number };
+/** Open ground with a tower and palms: a quad's courtyard, or the plaza in front of a lone building. */
+type Green = { x: number; z: number; floors: number; halfX: number; halfZ: number; towerX: number; towerZ: number; plaza: boolean };
+type Box = { x: number; y: number; z: number; sx: number; sy: number; sz: number; yaw?: number; color?: string };
 
 /** Turn a local (x, z) by `yaw` around the vertical axis, the way three.js turns objects. */
 function turn(x: number, z: number, yaw: number): [number, number] {
@@ -63,81 +74,87 @@ function turn(x: number, z: number, yaw: number): [number, number] {
 }
 
 /**
- * Rooms stacked into buildings, and buildings set around quads like the USC campus: four
- * buildings (north, south, west, east) frame each lawn. A floor is a corridor with
- * classrooms on both sides; up to five floors a building. Lower floors are the brick facade;
- * the top floor is open so its rooms and people show.
+ * Rooms stacked into buildings. A floor is a corridor with classrooms on both sides; up to
+ * five floors a building. Four buildings close a quad around a courtyard lawn, their corners
+ * touching, like the USC quads; a handful of rooms is one building with a plaza in front.
+ * Lower floors are the facade; the top floor is open so its rooms and people show.
  */
 export function fleetLayout(count: number, width: number, depth: number) {
   const perSide = Math.min(ROOMS_PER_SIDE, Math.max(1, Math.ceil(Math.round(count) / 2)));
   const perFloor = perSide * 2;
-  const perBuilding = perFloor * MAX_FLOORS;
-  const shown = Math.max(1, Math.min(Math.round(count), perBuilding * MAX_BUILDINGS));
-  const total = Math.ceil(shown / perBuilding);
+  // rooms in each building: floors from FLOOR_PLAN, the last building takes what is left
+  const target = Math.max(1, Math.round(count));
+  const sizes: number[] = [];
+  for (let left = target; left > 0 && sizes.length < MAX_BUILDINGS; ) {
+    const rooms = Math.min(left, perFloor * FLOOR_PLAN[sizes.length % FLOOR_PLAN.length]!);
+    sizes.push(rooms);
+    left -= rooms;
+  }
+  const total = sizes.length;
   const bWidth = perSide * width;
   const bDepth = depth * 2 + CORRIDOR;
-  const lawnSide = bWidth;
-  const ring = lawnSide / 2 + WALK + bDepth / 2; // quad centre to a building's centre
-  const quadSize = lawnSide + 2 * (WALK + bDepth);
-  const quadCount = Math.ceil(total / 4);
-  const qCols = Math.max(1, Math.ceil(Math.sqrt(quadCount)));
-  const qRows = Math.ceil(quadCount / qCols);
-  const spanX = qCols * (quadSize + STREET) - STREET;
-  const spanZ = qRows * (quadSize + STREET) - STREET;
-  // north, south, west, east of the lawn; west and east turned a quarter
-  const sides: [number, number, number][] = [
-    [0, -ring, 0],
-    [0, ring, 0],
-    [-ring, 0, Math.PI / 2],
-    [ring, 0, Math.PI / 2],
-  ];
-  const quads: Quad[] = [];
+  const courtX = bWidth / 2 - bDepth; // courtyard half-width between the west and east wings
+  const courtyard = courtX * 2 >= MIN_COURT;
   const buildings: Building[] = [];
   const others: Building[] = [];
+  const greens: Green[] = [];
   const spots: Spot[] = [];
-  for (let b = 0; b < total; b++) {
-    const q = Math.floor(b / 4);
-    if (!quads[q]) {
-      quads[q] = {
-        x: (q % qCols) * (quadSize + STREET) - spanX / 2 + quadSize / 2,
-        z: Math.floor(q / qCols) * (quadSize + STREET) - spanZ / 2 + quadSize / 2,
-        floors: 0,
-      };
-    }
-    const quad = quads[q]!;
-    const [ox, oz, yaw] = sides[b % 4]!;
-    const rooms = Math.min(perBuilding, shown - b * perBuilding);
+  const addRooms = (x: number, z: number, yaw: number, rooms: number, style: number) => {
     const floors = Math.ceil(rooms / perFloor);
     const top = rooms - (floors - 1) * perFloor;
-    const x = quad.x + ox;
-    const z = quad.z + oz;
-    quad.floors = Math.max(quad.floors, floors);
-    buildings.push({ x, z, yaw, floors });
+    buildings.push({ x, z, yaw, floors, style });
     for (let j = 0; j < top; j++) {
       const south = j >= perSide;
       const [dx, dz] = turn(-bWidth / 2 + width / 2 + (j % perSide) * width, (south ? 1 : -1) * (CORRIDOR / 2 + depth / 2), yaw);
       // south-row rooms turned around: both rows face the corridor
-      spots.push({ x: x + dx, y: (floors - 1) * FLOOR_HEIGHT, z: z + dz, yaw: yaw + (south ? Math.PI : 0) });
+      spots.push({ x: x + dx, y: (floors - 1) * FLOOR_HEIGHT + SLAB, z: z + dz, yaw: yaw + (south ? Math.PI : 0) });
     }
-  }
-  // Fill the rest of the grid: every quad gets its lawn, and empty sides get grey buildings.
-  for (let q = 0; q < qCols * qRows; q++) {
-    if (!quads[q]) {
-      quads[q] = {
-        x: (q % qCols) * (quadSize + STREET) - spanX / 2 + quadSize / 2,
-        z: Math.floor(q / qCols) * (quadSize + STREET) - spanZ / 2 + quadSize / 2,
-        floors: 3,
-      };
-    }
-    for (let side = 0; side < 4; side++) {
-      if (q * 4 + side >= total) {
+    return floors;
+  };
+  let spanX: number;
+  let spanZ: number;
+  if (!courtyard) {
+    // One small building, a plaza in front with a few palms, a tower at its end.
+    spanX = Math.max(bWidth + 8, 24);
+    spanZ = bDepth + 1 + PLAZA;
+    const bz = -spanZ / 2 + bDepth / 2;
+    const floors = addRooms(0, bz, 0, sizes[0]!, 0);
+    greens.push({ x: 0, z: bz + bDepth / 2 + 1 + PLAZA / 2, floors, halfX: spanX / 2, halfZ: PLAZA / 2, towerX: bWidth / 2 + 2.5, towerZ: bz, plaza: true });
+  } else {
+    const quadW = bWidth;
+    const quadD = bWidth + 2 * bDepth;
+    const quadCount = Math.ceil(total / 4);
+    // a near-square grid with as few empty slots as possible (an empty slot is a grey quad)
+    const qRows = Math.min(quadCount, Math.max(1, Math.round(Math.sqrt((quadCount * quadW) / quadD))));
+    const qCols = Math.ceil(quadCount / qRows);
+    spanX = qCols * (quadW + STREET) - STREET;
+    spanZ = qRows * (quadD + STREET) - STREET;
+    // north, south, west, east; the west and east wings fit between the ends of the other two
+    const sides: [number, number, number][] = [
+      [0, -(bWidth / 2 + bDepth / 2), 0],
+      [0, bWidth / 2 + bDepth / 2, 0],
+      [-(bWidth / 2 - bDepth / 2), 0, Math.PI / 2],
+      [bWidth / 2 - bDepth / 2, 0, Math.PI / 2],
+    ];
+    for (let q = 0; q < qCols * qRows; q++) {
+      const qx = (q % qCols) * (quadW + STREET) - spanX / 2 + quadW / 2;
+      const qz = Math.floor(q / qCols) * (quadD + STREET) - spanZ / 2 + quadD / 2;
+      let floors = 0;
+      for (let side = 0; side < 4; side++) {
+        const b = q * 4 + side;
         const [ox, oz, yaw] = sides[side]!;
-        others.push({ x: quads[q]!.x + ox, z: quads[q]!.z + oz, yaw, floors: 2 + ((q + side) % 3) });
+        if (b < total) {
+          floors = Math.max(floors, addRooms(qx + ox, qz + oz, yaw, sizes[b]!, (b + q) % STYLES.length));
+        } else {
+          // sides with no classrooms of ours: other campus buildings, grey as on the campus map
+          others.push({ x: qx + ox, z: qz + oz, yaw, floors: 2 + ((q + side) % 3), style: 0 });
+        }
       }
+      greens.push({ x: qx, z: qz, floors: floors || 3, halfX: courtX, halfZ: bWidth / 2, towerX: qx, towerZ: qz - bWidth / 2 + 2.6, plaza: false });
     }
   }
-  const height = (Math.max(...quads.map((q) => q.floors)) + 3) * FLOOR_HEIGHT; // the bell towers stand taller
-  return { spots, buildings, others, quads, perSide, bWidth, bDepth, lawnSide, spanX, spanZ, height };
+  const height = (Math.max(...greens.map((g) => g.floors)) + 3) * FLOOR_HEIGHT; // the bell towers stand taller
+  return { spots, buildings, others, greens, perSide, bWidth, bDepth, spanX, spanZ, height };
 }
 
 type Part = { x: number; y: number; z: number; scale?: number; color?: string };
@@ -181,12 +198,16 @@ function useBoxes(boxes: Box[]) {
       return;
     }
     const dummy = new THREE.Object3D();
+    const tint = new THREE.Color();
     boxes.forEach((b, i) => {
       dummy.position.set(b.x, b.y, b.z);
       dummy.rotation.set(0, b.yaw ?? 0, 0);
       dummy.scale.set(b.sx, b.sy, b.sz);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
+      if (b.color) {
+        mesh.setColorAt(i, tint.set(b.color));
+      }
     });
     finish(mesh, boxes.length);
   }, [boxes]);
@@ -203,14 +224,14 @@ function finish(mesh: THREE.InstancedMesh, count: number) {
 }
 
 /** A box `local` to a building (x along its length, z across), placed in the world. */
-function place(b: Building, x: number, y: number, z: number, sx: number, sy: number, sz: number): Box {
+function place(b: Building, x: number, y: number, z: number, sx: number, sy: number, sz: number, color?: string): Box {
   const [dx, dz] = turn(x, z, b.yaw);
-  return { x: b.x + dx, y, z: b.z + dz, sx, sy, sz, yaw: b.yaw };
+  return { x: b.x + dx, y, z: b.z + dz, sx, sy, sz, yaw: b.yaw, color };
 }
 
-/** Everything that isn't a room: brick, trim, windows, arcades, roof edges, towers, lawns, palms. */
+/** Everything that isn't a room: facades, trim, windows, roof edges, towers, lawns, palms. */
 function campusPieces(layout: ReturnType<typeof fleetLayout>, width: number) {
-  const { bWidth, bDepth, perSide, lawnSide } = layout;
+  const { bWidth, bDepth, perSide } = layout;
   const bricks: Box[] = [];
   const trims: Box[] = [];
   const windows: Box[] = [];
@@ -226,59 +247,99 @@ function campusPieces(layout: ReturnType<typeof fleetLayout>, width: number) {
   const streets: Box[] = [];
   const city: Box[] = [];
   for (const b of layout.buildings) {
+    const st = STYLES[b.style]!;
     const lower = (b.floors - 1) * FLOOR_HEIGHT;
-    const topY = lower;
     if (lower > 0) {
-      bricks.push(place(b, 0, lower / 2, 0, bWidth, lower, bDepth));
+      bricks.push(place(b, 0, lower / 2, 0, bWidth, lower, bDepth, st.wall));
     }
     for (let f = 0; f < b.floors - 1; f++) {
-      // a cream string course at each floor line
-      trims.push(place(b, 0, (f + 1) * FLOOR_HEIGHT - 0.15, 0, bWidth + 0.3, 0.3, bDepth + 0.3));
+      if (f < b.floors - 2) {
+        // a string course at each floor line (the slab is the top one)
+        trims.push(place(b, 0, (f + 1) * FLOOR_HEIGHT - 0.15, 0, bWidth + 0.3, 0.3, bDepth + 0.3, st.trim));
+      }
       for (const side of [-1, 1]) {
+        if (st.band && f > 0) {
+          // modern: one glass band per floor
+          windows.push(place(b, 0, f * FLOOR_HEIGHT + 1.5, side * (bDepth / 2 + 0.03), bWidth * 0.96, 1.9, 0.08, st.glass));
+          continue;
+        }
         for (let k = 0; k < perSide * 2; k++) {
           const x = -bWidth / 2 + (k + 0.5) * (width / 2);
-          if (f === 0) {
+          if (f === 0 && st.arcade) {
             // ground floor: an arcade of cream piers
-            trims.push(place(b, x - width / 4, 1.3, side * (bDepth / 2 + 0.25), 0.45, 2.6, 0.5));
+            trims.push(place(b, x - width / 4, 1.3, side * (bDepth / 2 + 0.25), 0.45, 2.6, 0.5, st.trim));
           } else {
-            windows.push(place(b, x, f * FLOOR_HEIGHT + 1.55, side * (bDepth / 2 + 0.03), 0.9, 1.7, 0.08));
+            windows.push(place(b, x, f * FLOOR_HEIGHT + 1.55, side * (bDepth / 2 + 0.03), 0.9, 1.7, 0.08, st.glass));
           }
         }
       }
     }
-    // the open top floor: a slab, and a terracotta roof edge all the way round
-    trims.push(place(b, 0, topY - 0.06, 0, bWidth + 0.3, 0.12, bDepth + 0.3));
+    // the open top floor: a slab the rooms stand on, and a roof edge all the way round
+    trims.push(place(b, 0, lower + SLAB / 2, 0, bWidth + 0.3, SLAB, bDepth + 0.3, st.trim));
+    const edgeY = lower + SLAB + 0.35;
     for (const side of [-1, 1]) {
-      roofs.push(place(b, 0, topY + 0.35, side * (bDepth / 2 + 0.35), bWidth + 1.4, 0.7, 0.7));
-      roofs.push(place(b, side * (bWidth / 2 + 0.35), topY + 0.35, 0, 0.7, 0.7, bDepth));
+      roofs.push(place(b, 0, edgeY, side * (bDepth / 2 + 0.35), bWidth + 1.4, 0.7, 0.7, st.roof));
+      roofs.push(place(b, side * (bWidth / 2 + 0.35), edgeY, 0, 0.7, 0.7, bDepth, st.roof));
+    }
+    if (st.feature === "pavilion" && b.floors > 1) {
+      // an entrance pavilion in the middle of each long side, with a hipped roof
+      for (const side of [-1, 1]) {
+        const z = side * (bDepth / 2 + 0.7);
+        bricks.push(place(b, 0, (lower + 1.4) / 2, z, width * 1.6, lower + 1.4, 1.4, st.wall));
+        trims.push(place(b, 0, 1.3, side * (bDepth / 2 + 1.45), width * 0.7, 2.6, 0.12, st.trim)); // the doorway
+        roofs.push(place(b, 0, lower + 1.65, z, width * 1.8, 0.5, 1.9, st.roof));
+      }
+    }
+    if (st.feature === "turrets") {
+      // a turret on each corner, a floor taller than the building
+      const h = lower + FLOOR_HEIGHT + 1.2;
+      for (const sx of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+          const x = sx * (bWidth / 2 + 0.6);
+          const z = sz * (bDepth / 2 + 0.6);
+          bricks.push(place(b, x, h / 2, z, 2.6, h, 2.6, st.wall));
+          caps.push({ ...place(b, x, h + 1.2, z, 3.2, 2.4, 3.2), yaw: b.yaw + Math.PI / 4, color: st.roof });
+        }
+      }
     }
   }
   for (const b of layout.others) {
     const h = b.floors * FLOOR_HEIGHT;
-    greys.push(place(b, 0, h / 2, 0, bWidth * 0.9, h, bDepth));
+    greys.push(place(b, 0, h / 2, 0, bWidth * 0.94, h, bDepth));
   }
-  for (const q of layout.quads) {
-    // the lawn with two crossing walks
-    lawns.push({ x: q.x, y: 0.05, z: q.z, sx: lawnSide + 2 * WALK, sy: 0.1, sz: lawnSide + 2 * WALK });
-    paths.push({ x: q.x, y: 0.15, z: q.z, sx: lawnSide + 2 * WALK, sy: 0.03, sz: 2.6 });
-    paths.push({ x: q.x, y: 0.15, z: q.z, sx: 2.6, sy: 0.03, sz: lawnSide + 2 * WALK });
-    // a bell tower at the head of the lawn
-    const towerH = (q.floors + 3) * FLOOR_HEIGHT;
-    const tz = q.z - lawnSide / 2 + 3;
-    bricks.push({ x: q.x, y: towerH / 2, z: tz, sx: 4.2, sy: towerH, sz: 4.2 });
-    trims.push({ x: q.x, y: towerH - 1.6, z: tz, sx: 4.6, sy: 3.2, sz: 4.6 }); // belfry
-    caps.push({ x: q.x, y: towerH + 2.2, z: tz, sx: 3.6, sy: 4.4, sz: 3.6, yaw: Math.PI / 4 });
-    // palms along both walks
-    const reach = lawnSide / 2 + WALK - 2;
-    for (const t of [-0.88, -0.64, -0.4, 0.4, 0.64, 0.88]) {
-      for (const [px, pz] of [
-        [t * reach, 3.4],
-        [t * reach, -3.4],
-        [3.4, t * reach],
-        [-3.4, t * reach],
-      ] as [number, number][]) {
-        trunks.push({ x: q.x + px, y: 6, z: q.z + pz, sx: 0.55, sy: 12, sz: 0.55 });
-        crowns.push({ x: q.x + px, y: 12.4, z: q.z + pz, sx: 5.4, sy: 1.7, sz: 5.4 });
+  for (const g of layout.greens) {
+    // the lawn with crossing walks (one walk along a plaza)
+    lawns.push({ x: g.x, y: 0.05, z: g.z, sx: g.halfX * 2, sy: 0.1, sz: g.halfZ * 2 });
+    paths.push({ x: g.x, y: 0.15, z: g.z, sx: g.halfX * 2, sy: 0.03, sz: 2.6 });
+    if (!g.plaza) {
+      paths.push({ x: g.x, y: 0.15, z: g.z, sx: 2.6, sy: 0.03, sz: g.halfZ * 2 });
+    }
+    // a bell tower; smaller beside a lone small building
+    const s = g.plaza ? 0.7 : 1;
+    const towerH = (g.floors + (g.plaza ? 2 : 3)) * FLOOR_HEIGHT;
+    bricks.push({ x: g.towerX, y: towerH / 2, z: g.towerZ, sx: 4.2 * s, sy: towerH, sz: 4.2 * s, color: towerBrick });
+    trims.push({ x: g.towerX, y: towerH - 1.6, z: g.towerZ, sx: 4.6 * s, sy: 3.2, sz: 4.6 * s, color: towerTrim }); // belfry
+    caps.push({ x: g.towerX, y: towerH + 2.2, z: g.towerZ, sx: 3.6 * s, sy: 4.4, sz: 3.6 * s, yaw: Math.PI / 4, color: towerCap });
+    // palms along the walks, spaced and sized to the lawn so they never crowd the buildings
+    const p = Math.min(1, Math.max(0.45, Math.min(g.halfX, g.halfZ) / 20));
+    const off = 3.4 * p;
+    const palm = (x: number, z: number) => {
+      trunks.push({ x, y: 6 * p, z, sx: 0.55 * p, sy: 12 * p, sz: 0.55 * p });
+      crowns.push({ x, y: 12.4 * p, z, sx: 5.4 * p, sy: 1.7 * p, sz: 5.4 * p });
+    };
+    const along = (half: number) => {
+      const out: number[] = [];
+      for (let t = 6 * p; t < half - 3 * p; t += 10 * p) out.push(t, -t);
+      return out;
+    };
+    for (const t of along(g.halfX)) {
+      palm(g.x + t, g.z + off);
+      if (!g.plaza) palm(g.x + t, g.z - off);
+    }
+    if (!g.plaza) {
+      for (const t of along(g.halfZ)) {
+        palm(g.x + off, g.z + t);
+        palm(g.x - off, g.z + t);
       }
     }
   }
@@ -323,7 +384,7 @@ function campusPieces(layout: ReturnType<typeof fleetLayout>, width: number) {
   return { bricks, trims, windows, roofs, caps, lawns, paths, trunks, crowns, greys, grounds, blocks, streets, city };
 }
 
-/** The same room, `count` times, in red-brick buildings around lawns, seen from above at an angle. */
+/** The same room, `count` times, in campus buildings around lawns, seen from above at an angle. */
 export function Fleet({ shape }: { shape: FleetShape }) {
   const { width, depth, kind } = shape;
   const layout = useMemo(() => fleetLayout(shape.count, width, depth), [shape.count, width, depth]);
@@ -366,7 +427,7 @@ export function Fleet({ shape }: { shape: FleetShape }) {
   const bodyMesh = useRoomInstances(layout.spots, crowd.bodies);
   const headMesh = useRoomInstances(layout.spots, crowd.heads);
   // New buffers whenever the number of instances changes.
-  const key = `${layout.spots.length}:${layout.buildings.length}:${pieces.trims.length}:${pieces.windows.length}:${pieces.city.length}:${pieces.streets.length}:${pieces.greys.length}:${width}:${depth}:${crowd.bodies.length}`;
+  const key = `${layout.spots.length}:${layout.buildings.length}:${pieces.bricks.length}:${pieces.caps.length}:${pieces.trunks.length}:${pieces.lawns.length}:${pieces.paths.length}:${pieces.roofs.length}:${pieces.trims.length}:${pieces.windows.length}:${pieces.city.length}:${pieces.streets.length}:${pieces.greys.length}:${width}:${depth}:${crowd.bodies.length}`;
 
   const solid = (name: keyof typeof meshes, color: string, geometry: "box" | "cone" | "sphere" | "cylinder", shadow = true) =>
     pieces[name].length ? (
@@ -399,11 +460,11 @@ export function Fleet({ shape }: { shape: FleetShape }) {
       {solid("greys", otherBuilding, "box")}
       {solid("lawns", lawn, "box", false)}
       {solid("paths", path, "box", false)}
-      {solid("bricks", brick, "box")}
-      {solid("trims", cream, "box", false)}
-      {solid("windows", glass, "box", false)}
-      {solid("roofs", terracotta, "box", false)}
-      {solid("caps", terracotta, "cone")}
+      {solid("bricks", "#ffffff", "box")}
+      {solid("trims", "#ffffff", "box", false)}
+      {solid("windows", "#ffffff", "box", false)}
+      {solid("roofs", "#ffffff", "box", false)}
+      {solid("caps", "#ffffff", "cone")}
       {solid("trunks", trunk, "cylinder", false)}
       {solid("crowns", frond, "sphere", false)}
       <instancedMesh key={`f${key}`} ref={floorMesh.ref} args={[undefined, undefined, floorMesh.count]} receiveShadow>

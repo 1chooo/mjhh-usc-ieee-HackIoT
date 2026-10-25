@@ -143,7 +143,8 @@ export function evaluateWithModel(s: Scenario, room: RoomModel, at: string): Mod
         },
         {
           name: "Learning",
-          detail: `Learned from ${decision.learnedHours - 1} earlier hour${decision.learnedHours === 2 ? "" : "s"} of votes in this room.`,
+          // the model keeps six weeks of votes (keep_weeks in acmodel.py), so this stops at about 1,008
+          detail: `Remembers ${decision.learnedHours - 1} earlier hour${decision.learnedHours === 2 ? "" : "s"} of votes in this room (it keeps the last six weeks).`,
         },
       ]
     : [{ name: "Closed", detail: `The room is closed, so votes are ignored and the AC sets back to ${SETBACK_C}°C.` }];
