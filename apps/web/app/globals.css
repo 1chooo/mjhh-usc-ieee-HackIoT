@@ -1623,3 +1623,37 @@ body:has(.sim-shell) .colophon {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Simulator: the AC model panel (lib/ac-model.ts) */
+.sim-metrics .model-card {
+  pointer-events: auto;
+  margin-bottom: 8px;
+}
+
+.model-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.model-head span,
+.model-hint {
+  color: var(--muted);
+}
+
+.model-math {
+  margin: 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.model-hint {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.model-chart {
+  width: 100%;
+  min-height: 120px;
+}

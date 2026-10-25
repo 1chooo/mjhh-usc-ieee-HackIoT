@@ -8,7 +8,16 @@ import {
   spaces,
   scenarioFrom,
 } from "../lib/campus";
-import { evaluate, type Scenario, type SpaceKind } from "../lib/thermal";
+import { type Scenario, type SpaceKind } from "../lib/thermal";
+import { RoomModel } from "../lib/ac-model";
+import {
+  clockLabel,
+  evaluateWithModel,
+  roomAtC,
+  shiftClock,
+  simulatedVotes,
+} from "../lib/model-sim";
+import { ModelPanel, type HourLog } from "./sim/model-panel";
 import {
   activePersonVotes,
   castPersonVote,
@@ -34,6 +43,13 @@ type EaseClock = { from: Scenario; to: Scenario; elapsed: number };
 
 const opening = simulatorPresets[0]!;
 
+// The model's clock starts on a Wednesday morning; "Same time next week" returns here.
+const START_AT = "2026-11-04T09:00";
+// Read-only stand-in until a room has been stepped (preview never changes it).
+const UNTRAINED = new RoomModel();
+
+type Track = { room: RoomModel; at: string; weekStart: string; history: HourLog[] };
+
 export function SimulatorView() {
   const params = useSearchParams();
   const campus = useCampus();
@@ -46,6 +62,9 @@ export function SimulatorView() {
   const [playLabel, setPlayLabel] = useState<PlayLabel>("play");
   const [progress, setProgress] = useState(0);
   const [personVotes, setPersonVotes] = useState<PersonVote[] | null>(null);
+  const [tracks, setTracks] = useState<Record<string, Track>>({});
+  const [wantC, setWantC] = useState(21);
+  const [autoVotes, setAutoVotes] = useState(true);
   const applied = useRef(false);
   const scenarioRef = useRef(scenario);
   const storyRef = useRef<StoryClock | null>(null);
@@ -107,7 +126,81 @@ export function SimulatorView() {
     };
   }, []);
 
-  const result = evaluate(scenario);
+  const track = tracks[spaceId];
+  const clockAt = track?.at ?? START_AT;
+  const result = evaluateWithModel(scenario, track?.room ?? UNTRAINED, clockAt);
+
+  function trackFor(id: string): Track {
+    return tracks[id] ?? { room: new RoomModel(), at: START_AT, weekStart: START_AT, history: [] };
+  }
+
+  /** The model learns from this hour; the room reacts and the same people vote again. */
+  function nextHour() {
+    const s = scenarioRef.current;
+    const t = trackFor(spaceId);
+    const open = s.scheduledOpen;
+    const hot = open ? Math.round(s.hotVotes) : 0;
+    const cold = open ? Math.round(s.coldVotes) : 0;
+    const d = t.room.update(open ? s.occupancy : 0, hot, cold, t.at);
+    const setpointC = open ? d.setpointC : 28;
+    const roomC = roomAtC(setpointC, s);
+    const log: HourLog = {
+      at: t.at,
+      label: clockLabel(t.at, START_AT),
+      people: Math.round(s.occupancy),
+      hot,
+      cold,
+      setpointC,
+      roomC,
+      wantC: autoVotes ? wantC : null,
+      group: d.group ? `G${String(d.group.gid).padStart(2, "0")}` : "drop-in",
+    };
+    setTracks({
+      ...tracks,
+      [spaceId]: { ...t, at: shiftClock(t.at, 1), history: [...t.history, log].slice(-48) },
+    });
+    const votes = autoVotes ? simulatedVotes(roomC, wantC, s.occupancy) : { hotVotes: 0, coldVotes: 0 };
+    clearStory();
+    setPresetId(null);
+    setPersonVotes(null);
+    showRef.current({ ...s, indoorC: Number(roomC.toFixed(1)), ...votes });
+  }
+
+  /** The same class walks in a week later: the model already knows what they like. */
+  function nextWeek() {
+    const s = scenarioRef.current;
+    const t = trackFor(spaceId);
+    const at = shiftClock(t.weekStart, 24 * 7);
+    const startC = t.room.preview(s.scheduledOpen ? s.occupancy : 0, 0, 0, at).startC;
+    const roomC = roomAtC(startC, s);
+    setTracks({ ...tracks, [spaceId]: { ...t, at, weekStart: at } });
+    const votes = autoVotes ? simulatedVotes(roomC, wantC, s.occupancy) : { hotVotes: 0, coldVotes: 0 };
+    clearStory();
+    setPresetId(null);
+    setPersonVotes(null);
+    showRef.current({ ...s, indoorC: Number(roomC.toFixed(1)), ...votes });
+  }
+
+  function resetModel() {
+    const rest = { ...tracks };
+    delete rest[spaceId];
+    setTracks(rest);
+  }
+
+  function changeWant(next: number) {
+    setWantC(next);
+    if (autoVotes) {
+      patch(simulatedVotes(scenarioRef.current.indoorC, next, scenarioRef.current.occupancy));
+    }
+  }
+
+  function toggleAutoVotes() {
+    const next = !autoVotes;
+    setAutoVotes(next);
+    if (next) {
+      patch(simulatedVotes(scenarioRef.current.indoorC, wantC, scenarioRef.current.occupancy));
+    }
+  }
 
   function stopLoop() {
     if (loopRef.current) {
@@ -255,6 +348,7 @@ export function SimulatorView() {
     }
     clearStory();
     setPresetId(null);
+    setAutoVotes(false);
     setPersonVotes(cast.votes);
     showRef.current({
       ...scenarioRef.current,
@@ -445,6 +539,16 @@ export function SimulatorView() {
             />
           ) : null}
           <div className="sim-metrics">
+            {roomOnly ? (
+              <ModelPanel
+                clock={clockLabel(clockAt, START_AT)}
+                result={result}
+                history={track?.history ?? []}
+                onNextHour={nextHour}
+                onNextWeek={nextWeek}
+                onReset={resetModel}
+              />
+            ) : null}
             <div className="result-card">
               <ResultBlock result={result} />
             </div>
@@ -534,7 +638,10 @@ export function SimulatorView() {
                 step={1}
                 unit="votes"
                 value={scenario.hotVotes}
-                onChange={(hotVotes) => patch({ hotVotes })}
+                onChange={(hotVotes) => {
+                  setAutoVotes(false);
+                  patch({ hotVotes });
+                }}
               />
               <Slider
                 label="Cold votes"
@@ -543,17 +650,28 @@ export function SimulatorView() {
                 step={1}
                 unit="votes"
                 value={scenario.coldVotes}
-                onChange={(coldVotes) => patch({ coldVotes })}
+                onChange={(coldVotes) => {
+                  setAutoVotes(false);
+                  patch({ coldVotes });
+                }}
               />
               <Slider
-                label="Full-vote influence"
-                min={0}
-                max={2.5}
-                step={0.1}
+                label="Group prefers"
+                min={16}
+                max={30}
+                step={0.5}
                 unit="°C"
-                value={scenario.voteInfluenceC}
-                onChange={(voteInfluenceC) => patch({ voteInfluenceC })}
+                value={wantC}
+                onChange={changeWant}
               />
+              <button
+                type="button"
+                className="ghost"
+                aria-pressed={autoVotes}
+                onClick={toggleAutoVotes}
+              >
+                {autoVotes ? "Votes follow the group" : "Votes set by hand"}
+              </button>
               <Slider
                 label="Heat from one person"
                 min={60}
@@ -566,15 +684,6 @@ export function SimulatorView() {
             </fieldset>
             <fieldset>
               <legend>Plant and the hour</legend>
-              <Slider
-                label="Deadband"
-                min={0.2}
-                max={1.5}
-                step={0.1}
-                unit="°C"
-                value={scenario.deadbandC}
-                onChange={(deadbandC) => patch({ deadbandC })}
-              />
               <Slider
                 label="Envelope loss"
                 min={0.6}
