@@ -11,7 +11,7 @@ There's no custom server. Supabase generates a REST API from the tables in [DBSC
 | Key | Looks like | Use it in | Can do |
 | --- | --- | --- | --- |
 | Publishable | `sb_publishable_…` | Vote page, dashboard (browser) | Read everything, cast votes |
-| Secret | `sb_secret_…` | YOLO script, device-gateway, admin scripts | Everything |
+| Secret | `sb_secret_…` | YOLO script, AC model, device-gateway, admin scripts | Everything |
 
 Both keys are in the Supabase Dashboard under **Project Settings → API Keys**. Never put the secret key in browser code or in a `NEXT_PUBLIC_*` variable.
 
@@ -22,7 +22,7 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 ```
 
 ```python
-# YOLO script (.env: SUPABASE_URL, SUPABASE_SECRET_KEY)
+# YOLO script or AC model (.env: SUPABASE_URL, SUPABASE_SECRET_KEY)
 from supabase import create_client
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SECRET_KEY"])
 ```
@@ -36,6 +36,7 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SECRET_KEY"]
 | `vote` | publishable | **publishable** (`room_id`, `is_hot` only) | secret | secret |
 | `occupancy_reading` | publishable | secret | secret | secret |
 | `temp_reading` | publishable | secret | secret | secret |
+| `setpoint` | publishable | secret | secret | secret |
 
 Anything the publishable key can do, the secret key can do too.
 
@@ -52,10 +53,11 @@ Read-only. This is the main endpoint for the dashboard and the algorithm.
 [{ "room_id": "lab-101", "name": "Lab 101",
    "ppl": 12, "ppl_at": "2026-10-24T20:51:03.12+00:00",
    "temp_c": 24.5, "temp_at": "2026-10-24T20:50:58.40+00:00",
-   "hot_count": 3, "cold_count": 1 }]
+   "hot_count": 3, "cold_count": 1,
+   "target_c": 22.5, "target_at": "2026-10-24T20:30:01.07+00:00" }]
 ```
 
-`ppl` and `temp_c` are `null` until the first reading arrives. `hot_count` and `cold_count` cover the last 10 minutes.
+`ppl`, `temp_c`, and `target_c` are `null` until the first row arrives. `hot_count` and `cold_count` cover the last 10 minutes.
 
 ## `room`
 
@@ -109,6 +111,34 @@ Same operations as `occupancy_reading`, with `temp_c` in place of `ppl`.
 
 `temp_c` must be between −40 and 85 °C.
 
+## `setpoint`
+
+AC target temperatures predicted by the model in `apps/alg`, one row per prediction.
+
+| Operation | REST | supabase-js | Key |
+| --- | --- | --- | --- |
+| Save a prediction | `POST /setpoint` `{"room_id": "lab-101", "target_c": 22.5}` | `.from("setpoint").insert({ room_id: "lab-101", target_c: 22.5 })` | secret |
+| Latest for a room | `GET /setpoint?room_id=eq.lab-101&order=created_at.desc&limit=1` | `.from("setpoint").select("*").eq("room_id", "lab-101").order("created_at", { ascending: false }).limit(1)` | publishable |
+| History since a time | `GET /setpoint?room_id=eq.lab-101&created_at=gte.2026-10-24T19:00:00Z&order=created_at.asc` | `.select("*").eq("room_id", "lab-101").gte("created_at", since).order("created_at")` | publishable |
+| Fix / delete one | `PATCH` / `DELETE /setpoint?id=eq.42` | `.update({ target_c: 23 }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
+
+`target_c` must be between 16 and 30 °C, the same range the model clamps to.
+
+In `apps/alg/main.py`, save each target next to `set_ac(target)`. `run_preset` can return `None`, so skip the insert then. `ROOM_ID` must match an existing `room.id`.
+
+```python
+sb.table("setpoint").insert({"room_id": ROOM_ID, "target_c": target}).execute()
+```
+
+The gateway can pick up each new target the moment it's saved and forward it to the AC:
+
+```ts
+sb.channel("setpoints")
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "setpoint" },
+      ({ new: row }) => sendToAc(row.room_id, row.target_c))   // sendToAc: your DeviceCommand "set" call
+  .subscribe();
+```
+
 ## Filters and options
 
 | You want | REST query | supabase-js |
@@ -132,7 +162,7 @@ Error bodies look like `{"code": "...", "message": "...", "details": "..."}`.
 | 401 | `42501` | This key isn't allowed to do that. For example, the publishable key writing a reading, or sending `created_at` with a vote. |
 | 409 | `23503` | `room_id` doesn't exist, or you're deleting a room that still has rows. |
 | 409 | `23505` | That room id already exists. |
-| 400 | `23514` | A value is out of range: `ppl < 0`, `temp_c` outside −40..85, or a room id with uppercase letters, spaces or `/`. |
+| 400 | `23514` | A value is out of range: `ppl < 0`, `temp_c` outside −40..85, `target_c` outside 16..30, or a room id with uppercase letters, spaces or `/`. |
 | 400 | `23502` | A required field is missing. |
 
 ## Live updates
@@ -145,6 +175,7 @@ supabase
   .on("postgres_changes", { event: "INSERT", schema: "public", table: "vote" }, refetch)
   .on("postgres_changes", { event: "INSERT", schema: "public", table: "occupancy_reading" }, refetch)
   .on("postgres_changes", { event: "INSERT", schema: "public", table: "temp_reading" }, refetch)
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "setpoint" }, refetch)
   .subscribe();
 ```
 
