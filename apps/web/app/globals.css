@@ -187,6 +187,8 @@ h2 {
 }
 
 .site-nav {
+  position: relative;
+  z-index: 2;
   max-width: 1400px;
   margin: 0 auto;
   transition:
@@ -305,12 +307,33 @@ h2 {
 .mobile-menu {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   gap: 28px;
-  padding: 28px 24px 36px;
+  padding: 104px 24px max(36px, env(safe-area-inset-bottom));
+  overflow: auto;
+  background: var(--bg);
+}
+
+.site-header:has(.mobile-menu.is-pass) {
+  pointer-events: none;
+}
+
+.site-header:has(.mobile-menu.is-pass) .site-nav {
+  pointer-events: auto;
+}
+
+.mobile-menu.is-pass {
+  background: transparent;
+  pointer-events: none;
+}
+
+.mobile-menu.is-pass nav {
+  pointer-events: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
   background: var(--bg);
 }
 
@@ -325,6 +348,12 @@ h2 {
   font-size: clamp(3rem, 12vw, 4.5rem);
   line-height: 0.95;
   letter-spacing: -0.03em;
+}
+
+.mobile-menu nav a[aria-current="page"] {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.12em;
 }
 
 .shell {
@@ -1753,6 +1782,48 @@ body:has(.sim-shell) .colophon {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.vote-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.join-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.join-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: min(100%, 420px);
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.join-card img {
+  width: min(100%, 320px);
+  height: auto;
+}
+
+.join-url {
+  color: var(--muted);
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .vote-side {

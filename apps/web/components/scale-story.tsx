@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
+import { Cite } from "./cite";
 import { RoomModel } from "../lib/ac-model";
+import { source } from "../lib/references";
 import { dailySavings } from "../lib/sim-run";
 import { firstClassAt, scenarioFor, simRooms } from "../lib/sim-rooms";
 import styles from "./scale-story.module.css";
@@ -46,7 +48,13 @@ export function ScaleStory({
   const rangeId = useId();
   // eight weeks of hours (about a second), worked out once
   const perDay = useMemo(
-    () => dailySavings(sampleRoom, new RoomModel(), firstClassAt(sampleRoom), scenarioFor(sampleRoom, null, 24)),
+    () =>
+      dailySavings(
+        sampleRoom,
+        new RoomModel(),
+        firstClassAt(sampleRoom),
+        scenarioFor(sampleRoom, null, 24),
+      ),
     [],
   );
   const days = spanHours / 24;
@@ -124,8 +132,11 @@ export function ScaleStory({
             {count.format(rooms)} {roomLabel} · {spanLabel}
           </h3>
           <p>
-            {money.format(perDay.usd)} per room per day × {count.format(rooms)} {rooms === 1 ? "room" : "rooms"} ×{" "}
-            {days >= 1 ? `${count.format(Math.round(days))} ${Math.round(days) === 1 ? "day" : "days"}` : spanLabel}
+            {money.format(perDay.usd)} per room per day × {count.format(rooms)}{" "}
+            {rooms === 1 ? "room" : "rooms"} ×{" "}
+            {days >= 1
+              ? `${count.format(Math.round(days))} ${Math.round(days) === 1 ? "day" : "days"}`
+              : spanLabel}
           </p>
           <dl className={increasing ? styles.increase : styles.savings}>
             <div>
@@ -150,9 +161,18 @@ export function ScaleStory({
 
       <div className={styles.foot}>
         <p>
-          Per room: {sampleRoom.name} ({sampleRoom.building}) from the simulator, its next 8 weeks
-          averaged per day, priced as LADWP two-month bills, against an AC fixed at 71.6°F. Estimates,
-          not measured building savings.
+          Per room: {sampleRoom.name} ({sampleRoom.building}) from the
+          simulator, its next 8 weeks averaged per day, against an AC fixed at
+          71.6°F. About 10% less cooling electricity per 1°C warmer room{" "}
+          <Cite n={source.hoyt} />. A USC conference paper quotes that study’s
+          29% cooling saving <Cite n={source.ghahramani} />, and the CBE
+          calculator restates it <Cite n={source.cbe} />. Measured commercial
+          buildings are reported in <Cite n={source.deChalendar} />. Each seated
+          person adds 117 W of heat <Cite n={source.ashrae} />. Dollars use
+          LADWP R-1A two-month bills <Cite n={source.ladwpRates} />,{" "}
+          <Cite n={source.ladwpTiers} />. Campus ZIP 90007 is Zone 2 in the rate
+          ordinance <Cite n={source.ladwpZones} />. This page prices Zone 1.
+          These figures estimate cooling electricity from the published studies.
         </p>
         <Link className="text-link" href="/impact">
           Impact <span aria-hidden="true">↗</span>

@@ -1,3 +1,5 @@
+import { Cite } from "./cite";
+import { source } from "../lib/references";
 import { fromF, toF } from "../lib/units";
 import styles from "./algorithm-story.module.css";
 
@@ -30,27 +32,87 @@ const groups = [
 ];
 
 const week1 = [
-  { time: "09:00", label: "WRIT 150", tag: "new group", temp: "77.0 → 75.2°F", kind: "new" },
-  { time: "10:00", label: "WRIT 150", tag: "same group", temp: "75.2°F", kind: "same" },
-  { time: "11:00", label: "MATH 125", tag: "new group", temp: "77.9 → 81.5°F", kind: "new" },
-  { time: "12:00", label: "Empty", tag: "set back", temp: "78.8°F", kind: "empty" },
+  {
+    time: "09:00",
+    label: "WRIT 150",
+    tag: "new group",
+    temp: "77.0 → 75.2°F",
+    kind: "new",
+  },
+  {
+    time: "10:00",
+    label: "WRIT 150",
+    tag: "same group",
+    temp: "75.2°F",
+    kind: "same",
+  },
+  {
+    time: "11:00",
+    label: "MATH 125",
+    tag: "new group",
+    temp: "77.9 → 81.5°F",
+    kind: "new",
+  },
+  {
+    time: "12:00",
+    label: "Empty",
+    tag: "set back",
+    temp: "78.8°F",
+    kind: "empty",
+  },
 ];
 const week2 = [
-  { time: "09:00", label: "WRIT 150", tag: "recognized", temp: "starts 75.2°F", kind: "known" },
-  { time: "10:00", label: "WRIT 150", tag: "same group", temp: "75.2°F", kind: "same" },
-  { time: "11:00", label: "MATH 125", tag: "recognized", temp: "starts 81.5°F", kind: "known" },
-  { time: "12:00", label: "Empty", tag: "set back", temp: "78.8°F", kind: "empty" },
+  {
+    time: "09:00",
+    label: "WRIT 150",
+    tag: "recognized",
+    temp: "starts 75.2°F",
+    kind: "known",
+  },
+  {
+    time: "10:00",
+    label: "WRIT 150",
+    tag: "same group",
+    temp: "75.2°F",
+    kind: "same",
+  },
+  {
+    time: "11:00",
+    label: "MATH 125",
+    tag: "recognized",
+    temp: "starts 81.5°F",
+    kind: "known",
+  },
+  {
+    time: "12:00",
+    label: "Empty",
+    tag: "set back",
+    temp: "78.8°F",
+    kind: "empty",
+  },
 ];
 
 export function AlgorithmStory() {
   return (
-    <section className={`section ${styles.story}`} id="algorithm" aria-labelledby="algorithm-title">
+    <section
+      className={`section ${styles.story}`}
+      id="algorithm"
+      aria-labelledby="algorithm-title"
+    >
       <div className={styles.intro}>
         <h2 id="algorithm-title">How the setpoint is chosen</h2>
+        <p>
+          The starting line, from 78.8°F at one person to 64.4°F at 300 people,
+          and the offsets a returning group keeps, are the project setpoint
+          model <Cite n={source.model} />.
+        </p>
       </div>
 
       {/* 1. The formula */}
-      <ol className={styles.formula} aria-label="Setpoint = crowd curve + group taste + vote fix">
+      <ol
+        className={styles.formula}
+        aria-label="Setpoint = crowd curve + group taste + vote fix"
+      >
         <li className={styles.term}>
           <strong>Crowd curve</strong>
           <svg viewBox="0 0 160 80" className={styles.mini} aria-hidden="true">
@@ -61,29 +123,63 @@ export function AlgorithmStory() {
             <circle cx="150" cy="60" r="3.5" className={styles.dotInk} />
           </svg>
         </li>
-        <li className={styles.op} aria-hidden="true">+</li>
+        <li className={styles.op} aria-hidden="true">
+          +
+        </li>
         <li className={styles.term}>
           <strong>Group taste</strong>
           <svg viewBox="0 0 160 80" className={styles.mini} aria-hidden="true">
             <line x1="8" y1="40" x2="152" y2="40" className={styles.baseline} />
             {[0, 1, 2, 3].map((w) => (
               <g key={w}>
-                <line x1={28 + w * 36} y1="40" x2={28 + w * 36} y2={40 - 6 - w * 5} className={styles.stem} />
-                <circle cx={28 + w * 36} cy={40 - 6 - w * 5} r="5" className={styles.dotWarm} />
+                <line
+                  x1={28 + w * 36}
+                  y1="40"
+                  x2={28 + w * 36}
+                  y2={40 - 6 - w * 5}
+                  className={styles.stem}
+                />
+                <circle
+                  cx={28 + w * 36}
+                  cy={40 - 6 - w * 5}
+                  r="5"
+                  className={styles.dotWarm}
+                />
               </g>
             ))}
           </svg>
         </li>
-        <li className={styles.op} aria-hidden="true">+</li>
+        <li className={styles.op} aria-hidden="true">
+          +
+        </li>
         <li className={styles.term}>
           <strong>Vote fix</strong>
           <svg viewBox="0 0 160 80" className={styles.mini} aria-hidden="true">
-            <rect x="8" y="30" width="96" height="20" rx="4" className={styles.barHot} />
-            <rect x="106" y="30" width="46" height="20" rx="4" className={styles.barCold} />
-            <path d="M56 66 L56 74 M50 70 L56 76 L62 70" className={styles.arrow} />
+            <rect
+              x="8"
+              y="30"
+              width="96"
+              height="20"
+              rx="4"
+              className={styles.barHot}
+            />
+            <rect
+              x="106"
+              y="30"
+              width="46"
+              height="20"
+              rx="4"
+              className={styles.barCold}
+            />
+            <path
+              d="M56 66 L56 74 M50 70 L56 76 L62 70"
+              className={styles.arrow}
+            />
           </svg>
         </li>
-        <li className={styles.op} aria-hidden="true">=</li>
+        <li className={styles.op} aria-hidden="true">
+          =
+        </li>
         <li className={`${styles.term} ${styles.result}`}>
           <strong>AC setpoint</strong>
           <span className={styles.big}>61–86°F</span>
@@ -97,33 +193,94 @@ export function AlgorithmStory() {
             <h3>Same curve, different classes</h3>
           </figcaption>
           <div className={styles.chartBox}>
-            <svg viewBox="0 0 680 360" className={styles.chart} role="img" aria-label="AC setpoint against head count. The starting line falls from 78.8°F at 1 person to 64.4°F at 300. Five classes sit above or below it by their learned offsets.">
+            <svg
+              viewBox="0 0 680 360"
+              className={styles.chart}
+              role="img"
+              aria-label="AC setpoint against head count. The starting line falls from 78.8°F at 1 person to 64.4°F at 300. Five classes sit above or below it by their learned offsets."
+            >
               {[64, 68, 72, 76, 80, 84].map((f) => (
                 <g key={f}>
-                  <line x1={X0} x2={X1} y1={y(fromF(f))} y2={y(fromF(f))} className={styles.grid} />
-                  <text x={X0 - 10} y={y(fromF(f)) + 4} textAnchor="end" className={styles.tick}>{f}°F</text>
+                  <line
+                    x1={X0}
+                    x2={X1}
+                    y1={y(fromF(f))}
+                    y2={y(fromF(f))}
+                    className={styles.grid}
+                  />
+                  <text
+                    x={X0 - 10}
+                    y={y(fromF(f)) + 4}
+                    textAnchor="end"
+                    className={styles.tick}
+                  >
+                    {f}°F
+                  </text>
                 </g>
               ))}
               {[0, 100, 200, 300].map((n) => (
-                <text key={n} x={x(n)} y={Y1 + 24} textAnchor="middle" className={styles.tick}>{n}</text>
+                <text
+                  key={n}
+                  x={x(n)}
+                  y={Y1 + 24}
+                  textAnchor="middle"
+                  className={styles.tick}
+                >
+                  {n}
+                </text>
               ))}
-              <text x={(X0 + X1) / 2} y={Y1 + 48} textAnchor="middle" className={styles.axisLabel}>people in the room</text>
-              <line x1={x(1)} y1={y(prior(1))} x2={x(300)} y2={y(prior(300))} className={styles.priorLine} />
+              <text
+                x={(X0 + X1) / 2}
+                y={Y1 + 48}
+                textAnchor="middle"
+                className={styles.axisLabel}
+              >
+                people in the room
+              </text>
+              <line
+                x1={x(1)}
+                y1={y(prior(1))}
+                x2={x(300)}
+                y2={y(prior(300))}
+                className={styles.priorLine}
+              />
               {groups.map((g) => {
                 const base = prior(g.people);
                 const top = base + g.offset;
                 const warm = g.offset > 0;
                 return (
                   <g key={g.name}>
-                    <line x1={x(g.people)} x2={x(g.people)} y1={y(base)} y2={y(top)} className={warm ? styles.offWarm : styles.offCool} />
-                    <circle cx={x(g.people)} cy={y(base)} r="3" className={styles.dotInk} />
-                    <circle cx={x(g.people)} cy={y(top)} r="6" className={warm ? styles.dotWarm : styles.dotCool} />
+                    <line
+                      x1={x(g.people)}
+                      x2={x(g.people)}
+                      y1={y(base)}
+                      y2={y(top)}
+                      className={warm ? styles.offWarm : styles.offCool}
+                    />
+                    <circle
+                      cx={x(g.people)}
+                      cy={y(base)}
+                      r="3"
+                      className={styles.dotInk}
+                    />
+                    <circle
+                      cx={x(g.people)}
+                      cy={y(top)}
+                      r="6"
+                      className={warm ? styles.dotWarm : styles.dotCool}
+                    />
                     <polyline
                       points={`${x(g.people) + 6},${y(top)} ${x(g.labelN) - 8},${y(g.labelT) - 5}`}
                       className={styles.leader}
                     />
-                    <text x={x(g.labelN)} y={y(g.labelT)} textAnchor={g.labelN > g.people ? "start" : "end"} className={styles.groupLabel}>
-                      {g.name} {g.offset > 0 ? "+" : "−"}{Math.abs(g.offset * 1.8).toFixed(1)}°F
+                    <text
+                      x={x(g.labelN)}
+                      y={y(g.labelT)}
+                      textAnchor={g.labelN > g.people ? "start" : "end"}
+                      className={styles.groupLabel}
+                    >
+                      {g.name} {g.offset > 0 ? "+" : "−"}
+                      {Math.abs(g.offset * 1.8).toFixed(1)}°F
                     </text>
                   </g>
                 );
@@ -145,10 +302,15 @@ export function AlgorithmStory() {
               <div key={row.name} className={styles.weekRow}>
                 <span className={styles.weekName}>{row.name}</span>
                 {row.cells.map((c) => (
-                  <div key={c.time} className={`${styles.cell} ${styles[c.kind]}`}>
+                  <div
+                    key={c.time}
+                    className={`${styles.cell} ${styles[c.kind]}`}
+                  >
                     <span className={styles.time}>{c.time}</span>
                     <strong>{c.label}</strong>
-                    {c.kind === "new" || c.kind === "known" ? <span className={styles.tag}>{c.tag}</span> : null}
+                    {c.kind === "new" || c.kind === "known" ? (
+                      <span className={styles.tag}>{c.tag}</span>
+                    ) : null}
                     <span className={styles.temp}>{c.temp}</span>
                   </div>
                 ))}
@@ -157,7 +319,6 @@ export function AlgorithmStory() {
           </div>
         </figure>
       </div>
-
     </section>
   );
 }

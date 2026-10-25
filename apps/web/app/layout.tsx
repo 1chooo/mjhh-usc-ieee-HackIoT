@@ -42,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${instrumentSans.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
       >
@@ -54,9 +54,11 @@ export default function RootLayout({
           <div className="colophon-inner flex flex-col gap-4">
             <nav className="colophon-links" aria-label="Footer">
               <Link href="/rooms">Rooms</Link>
+              <Link href="/vote">Vote</Link>
               <Link href="/impact">Impact</Link>
               <Link href="/simulator">Simulator</Link>
               <Link href="/dashboard">Dashboard</Link>
+              <Link href="/reference">References</Link>
             </nav>
             <p>Not a live HVAC controller.</p>
           </div>

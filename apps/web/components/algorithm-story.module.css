@@ -20,10 +20,20 @@
   letter-spacing: -0.035em;
 }
 
+.intro p {
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
 /* 1. formula */
 .formula {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(
+      0,
+      1fr
+    ) auto minmax(0, 1fr);
   align-items: stretch;
   gap: 12px;
   width: 100%;

@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useId, useState } from "react";
+import { Cite } from "./cite";
 import { simulatorPresets } from "../lib/campus";
+import { source } from "../lib/references";
 import {
   compareEnergyImpact,
   defaultImpactAssumptions,
@@ -259,7 +261,12 @@ export function LandingSimulator() {
 
         <details className={styles.assumptions}>
           <summary>
-            Assumptions · LADWP Tier 1 ${assumptions.electricityRate}/kWh
+            Assumptions · LADWP Tier 1 ${assumptions.electricityRate}/kWh{" "}
+            <Cite n={source.ladwpRates} />
+            {", tiers "}
+            <Cite n={source.ladwpTiers} />
+            {", campus zone "}
+            <Cite n={source.ladwpZones} />
           </summary>
           <div className={styles.assumptionInputs}>
             <NumberControl
@@ -293,8 +300,12 @@ export function LandingSimulator() {
             under the same room conditions for the selected span. Electricity =
             thermal load ÷ COP. Cost = electricity × rate. CO₂e = electricity ×
             grid factor. The rate starts at LADWP R-1A Zone 1 Tier 1 for
-            November, the month the simulator starts and the price of the first
-            700 kWh on each bill. COP and the grid factor stay illustrative.
+            November <Cite n={source.ladwpRates} />, the month the simulator
+            starts. That price is the first 700 kWh on a Zone 1 bill{" "}
+            <Cite n={source.ladwpTiers} />. This page prices Zone 1. The rate
+            ordinance lists campus ZIP 90007 in Zone 2{" "}
+            <Cite n={source.ladwpZones} />. COP and the grid factor stay
+            illustrative.
           </p>
           <p>
             This steady-state estimate excludes fan power, humidity removal,

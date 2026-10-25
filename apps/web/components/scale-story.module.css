@@ -188,7 +188,7 @@
   line-height: 1.6;
 }
 
-.foot a {
+.foot > a {
   flex-shrink: 0;
   border-color: var(--scale-line);
   font-size: 0.95rem;
