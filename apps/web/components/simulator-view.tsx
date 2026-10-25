@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { type Scenario } from "../lib/thermal";
 import { RoomModel } from "../lib/ac-model";
@@ -16,19 +16,12 @@ import {
   firstClassAt,
   getSimRoom,
   simRooms,
+  scenarioFor,
 } from "../lib/sim-rooms";
 import { ModelPanel, type HourLog, type KnownGroup } from "./sim/model-panel";
 import { addHour, NO_TOTALS, type EnergyTotals } from "../lib/billing";
-import { arrival, clockText, step } from "../lib/sim-run";
-import {
-  SCALE_RATE,
-  YEAR_HOURS,
-  acceleratedHours,
-  formatScaleDollars,
-  formatScaleKw,
-  formatScaleTime,
-  scaleDollars,
-} from "../lib/scale-savings";
+import { arrival, clockText, dailySavingsUsd, step } from "../lib/sim-run";
+import { formatScaleDollars } from "../lib/scale-savings";
 import { roomFootprint } from "./sim/layout";
 import {
   activePersonVotes,
@@ -172,12 +165,21 @@ export function SimulatorView() {
   const knownGroups: KnownGroup[] = model.groups.map((g) => ({ ...g, offsetC: model.offsetFor(g.gid) }));
   const nowClass = classAt(roomDef, clockAt);
 
-  // Bird's-eye: rooms × this hour's saved power × $/kWh × an accelerating clock.
+  // Scale-up: one room's daily saving × rooms × days.
   const [fleetRooms, setFleetRooms] = useState("");
+  const [fleetDays, setFleetDays] = useState("30");
   const roomsN = Math.max(0, Math.floor(Number(fleetRooms) || 0));
+  const daysN = Math.max(0, Number(fleetDays) || 0);
   const fleetActive = roomsN > 0 && mode === "fleet";
-  const hourSpan = scenario.hours > 0 ? scenario.hours : 1;
-  const savedKw = result.savedKwh / hourSpan;
+  const { outdoorC, humidityPct, wattsPerPerson, lossWPerM2K } = scenario;
+  // The projection runs 8 weeks of hours (about a second), so only while the campus is on screen.
+  const perRoomDay = useMemo(() => {
+    if (!fleetActive) {
+      return null;
+    }
+    const keep = { ...scenarioFor(roomDef, null, 24), outdoorC, humidityPct, wattsPerPerson, lossWPerM2K };
+    return dailySavingsUsd(roomDef, track?.room ?? UNTRAINED, track?.at ?? firstClassAt(roomDef), keep);
+  }, [fleetActive, roomDef, track, outdoorC, humidityPct, wattsPerPerson, lossWPerM2K]);
   const footprint = roomFootprint(roomDef.floorAreaM2, roomDef.kind);
   const fleetShape = {
     count: Math.max(1, roomsN),
@@ -568,9 +570,11 @@ export function SimulatorView() {
         </div>
         <div className="sim-corner" ref={cornerRef}>
           <ScaleFormula
-            active={fleetActive}
-            savedKw={savedKw}
-            rooms={fleetActive ? roomsN : 1}
+            perRoomDay={perRoomDay}
+            rooms={roomsN}
+            days={daysN}
+            daysValue={fleetDays}
+            onDaysChange={setFleetDays}
             roomsValue={fleetRooms}
             onRoomsFocus={() => {
               if (roomsN > 0) showMode("fleet");
@@ -794,77 +798,45 @@ function settle(input: Scenario): Scenario {
   return { ...input, capacity, occupancy, hotVotes, coldVotes };
 }
 
+/**
+ * Scale-up formula: what one room saves per day (the next eight weeks of this room, billed
+ * as LADWP two-month bills, see lib/sim-run.ts) × rooms × days.
+ */
 function ScaleFormula({
-  active,
-  savedKw,
+  perRoomDay,
   rooms,
+  days,
+  daysValue,
+  onDaysChange,
   roomsValue,
   onRoomsChange,
   onRoomsFocus,
 }: {
-  active: boolean;
-  savedKw: number;
+  perRoomDay: number | null;
   rooms: number;
+  days: number;
+  daysValue: string;
+  onDaysChange: (value: string) => void;
   roomsValue: string;
   onRoomsChange: (value: string) => void;
   onRoomsFocus: () => void;
 }) {
-  const [paused, setPaused] = useState(false);
-  const [reduce, setReduce] = useState(false);
-  const [hours, setHours] = useState(1);
-  const elapsedRef = useRef(0);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const apply = () => setReduce(media.matches);
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, []);
-
-  useEffect(() => {
-    if (!active) {
-      elapsedRef.current = 0;
-      setPaused(false);
-      setHours(1);
-      return;
-    }
-    if (reduce) {
-      setHours(YEAR_HOURS);
-      return;
-    }
-    if (paused) {
-      return;
-    }
-    const origin = performance.now() - elapsedRef.current;
-    let frame = 0;
-    const tick = (now: number) => {
-      elapsedRef.current = now - origin;
-      setHours(acceleratedHours(elapsedRef.current));
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [active, paused, reduce]);
-
-  const shownHours = active ? hours : 1;
-  const dollars = scaleDollars(rooms, savedKw, SCALE_RATE, shownHours);
-  const racing = active && !reduce && !paused;
-
+  const total = perRoomDay === null ? null : perRoomDay * rooms * days;
   return (
-    <div
-      className="sim-scale"
-      role="group"
-      aria-label="Savings: rooms × kilowatts × dollars per kilowatt-hour × time"
-    >
+    <div className="sim-scale" role="group" aria-label="Savings: per room per day × rooms × days">
       <div className="sim-scale-row">
+        <span className="sim-scale-rate" title="Average saved per room per day: the next 8 weeks of this room, LADWP bills, against an AC fixed at 22°C">
+          {perRoomDay === null ? "$—" : formatScaleDollars(perRoomDay)}
+          <small>/day</small>
+        </span>
+        <span aria-hidden="true">×</span>
         <label>
           <input
             type="number"
             inputMode="numeric"
             min={1}
             step={1}
-            placeholder="1"
+            placeholder="0"
             aria-label="Rooms"
             value={roomsValue}
             onFocus={onRoomsFocus}
@@ -873,37 +845,23 @@ function ScaleFormula({
           <small>rooms</small>
         </label>
         <span aria-hidden="true">×</span>
-        <span className="sim-scale-rate" title="Saved power this hour versus a 22°C baseline">
-          {formatScaleKw(savedKw)}
-        </span>
-        <span aria-hidden="true">×</span>
-        <span className="sim-scale-rate" title="LADWP R-1A Zone 1, Tier 1, November. The first 700 kWh of a simulator bill.">
-          ${SCALE_RATE}/kWh
-        </span>
-        <span aria-hidden="true">×</span>
-        <span className="sim-scale-time">
-          <span>{formatScaleTime(shownHours)}</span>
-          {active && !reduce ? (
-            <button
-              type="button"
-              className="sim-scale-pause"
-              aria-pressed={paused}
-              onClick={() => setPaused((current) => !current)}
-            >
-              {paused ? "Resume" : "Pause"}
-            </button>
-          ) : null}
-        </span>
+        <label>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            aria-label="Days"
+            value={daysValue}
+            onChange={(event) => onDaysChange(event.target.value)}
+          />
+          <small>days</small>
+        </label>
         <span aria-hidden="true">=</span>
-        <output
-          className={dollars < 0 ? "spend" : "save"}
-          aria-live={racing ? "off" : "polite"}
-          aria-label="Scaled savings"
-        >
-          {formatScaleDollars(dollars)}
+        <output className={total !== null && total < 0 ? "spend" : "save"} aria-live="polite" aria-label="Scaled savings">
+          {formatScaleDollars(total ?? 0)}
         </output>
       </div>
-      <p className="sim-scale-note">If this hour&apos;s saving held for every room and every later hour.</p>
     </div>
   );
 }

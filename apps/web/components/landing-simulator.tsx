@@ -303,7 +303,7 @@ export function LandingSimulator() {
           </p>
         </details>
       </section>
-      <ScaleStory impact={impact} spanLabel={span.label} />
+      <ScaleStory spanHours={span.hours} spanLabel={span.label} />
     </>
   );
 }
