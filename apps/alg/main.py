@@ -21,7 +21,7 @@ MODEL_PATH = os.path.join(HERE, "yolo26n.onnx")   # see camera_number_detection.
 CONF = 0.4                       # detection confidence: lower = fewer missed people, more false hits
 DHT_PIN = "D4"                   # DHT11 data pin: GPIO4 = physical pin 7
 DHT_READINGS = 3                 # average this many good readings (the DHT11 needs ~2 s between reads)
-TEST_INTERVAL = 30              # testing: seconds to vote before each cycle; None = real hourly schedule
+TEST_INTERVAL = 9              # testing: seconds to vote before each cycle; None = real hourly schedule
 
 _counter = None
 _dht = None
@@ -67,7 +67,7 @@ def count_people() -> int:
         from camera_number_detection import PeopleCounter
         _counter = PeopleCounter(CAMERA_SOURCE, model=MODEL_PATH, conf=CONF)
     return _counter.count()
-
+    #return 4
 
 def read_temperature() -> float | None:
     """DHT11 -> room temperature in C (not a model input, logged only). None if every read failed."""
@@ -114,33 +114,42 @@ def set_ac(target: float):
 
 
 # ---------------------------------------------------------------------- the periodic tasks
-def run_cycle(model: SimpleModel, timestamp: str | None = None):
+def run_cycle(model: SimpleModel, timestamp: str | None = None, closed_at: str | None = None):
+    """Votes up to `closed_at` -> sensors -> model -> AC -> save to the db, in that order.
+    `closed_at` (UTC, ISO) is when voting closed; it becomes the record's created_at, so the record
+    still marks the end of this cycle's vote window even though it's saved last."""
+    closed_at = closed_at or datetime.now(timezone.utc).isoformat()
+    try:
+        hot, cold = read_votes(closed_at)
+    except Exception as e:               # no votes is still a valid input, so keep going
+        print(f"  read_votes failed: {e!r}")
+        hot, cold = 0, 0
+
+    print("  reading sensors...")
     n = count_people()
     try:
         temp = read_temperature()
     except Exception as e:               # temperature is only logged, so a sensor problem must not stop the AC update
         print(f"  read_temperature failed: {e!r}")
         temp = None
-    try:                                 # the record marks the end of this cycle's vote window
-        until = db("POST", "/record", {"ppl": n, "temp_c": temp})[0]["created_at"]
-    except Exception as e:
-        print(f"  saving the record failed: {e!r}")
-        until = None                     # fall back to: votes since the newest record, up to now
-    try:
-        hot, cold = read_votes(until)
-    except Exception as e:               # no votes is still a valid input, so keep going
-        print(f"  read_votes failed: {e!r}")
-        hot, cold = 0, 0
-    hot, cold = min(hot, n), min(cold, max(n - min(hot, n), 0))   # model rejects hot + cold > n_people
-    
+    if hot + cold > n:                   # model rejects hot + cold > n_people: cut the extra votes, keeping the hot/cold ratio
+        total = hot + cold
+        hot = round(hot * n / total)
+        cold = n - hot
+        print(f"  {total} votes for {n} people, counting only hot {hot} / cold {cold}")
+
     target = model.update(n, hot, cold, timestamp)
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] {n} people, {'n/a' if temp is None else f'{temp:.1f}'} C, hot {hot} / cold {cold} -> {target} C")
-    print(set_ac(target))
-    try:                                 # a network problem must not stop the AC update
-        db("POST", "/setpoint", {"target_c": target})
-    except Exception as e:
-        print(f"  saving the setpoint failed: {e!r}")
+    set_ac(target)
+    print(f"  final temperature: {target} C")
 
+    print("  saving to db...")
+    try:                                 # a network problem must not stop the AC update
+        db("POST", "/record", {"ppl": n, "temp_c": temp, "created_at": closed_at})
+        db("POST", "/setpoint", {"target_c": target})
+        print("  saved")
+    except Exception as e:
+        print(f"  saving failed: {e!r}")
 
 
 def run_preset(model: SimpleModel):
@@ -157,8 +166,9 @@ def next_run(now: datetime, minute: int) -> datetime:
     return t if t > now else t + timedelta(hours=1)
 
 
-def vote_countdown(seconds: int):
-    """Show the vote window on the Pi's terminal, with the live count, before the sensors run."""
+def vote_countdown(seconds: int) -> str:
+    """Show the vote window on the Pi's terminal, with the live count. Returns when it closed (UTC, ISO)."""
+    print("  voting open")
     for left in range(seconds, 0, -1):
         try:
             hot, cold = read_votes()
@@ -167,20 +177,22 @@ def vote_countdown(seconds: int):
             tally = "count unavailable"
         print(f"\r  vote now: {left:3d} s left ({tally})   ", end="", flush=True)
         time.sleep(1)
+    closed_at = datetime.now(timezone.utc).isoformat()
     print("\r  voting closed" + " " * 40)
+    return closed_at
 
 
 def test_loop():
-    """Each cycle: show the simulated time -> TEST_INTERVAL seconds to vote -> sensors and model, as if
+    """Each cycle: simulated time -> voting open -> voting closed -> sensors and model -> save to the db, as if
     one hour had passed (the model learns per hour, so a real timestamp would pile every reading into
     the same hour). Nothing is saved to STATE_FILE."""
     model = SimpleModel(ROOM_ID)
     fake = datetime.now().replace(minute=RUN_MINUTE, second=0, microsecond=0)
     while True:
         print(f"\n(simulated time {fake:%a %H:%M})")
-        vote_countdown(TEST_INTERVAL)
+        closed_at = vote_countdown(TEST_INTERVAL)
         try:
-            run_cycle(model, fake.isoformat())
+            run_cycle(model, fake.isoformat(), closed_at)
         except Exception as e:
             print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] run_cycle failed: {e!r}")
         fake += timedelta(hours=1)
