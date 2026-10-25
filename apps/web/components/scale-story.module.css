@@ -21,6 +21,14 @@
   letter-spacing: -0.035em;
 }
 
+.intro p {
+  max-width: 65ch;
+  margin-top: 24px;
+  color: var(--scale-muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
 .scales {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -156,10 +164,20 @@
 
 .foot {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px 40px;
   width: 100%;
   padding-top: 24px;
   border-top: 1px solid var(--scale-line);
+}
+
+.foot p {
+  max-width: 85ch;
+  color: var(--scale-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
 
 .foot a {
@@ -185,6 +203,12 @@
 
 @media (max-width: 700px) {
   .story {
+    gap: 28px;
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+
+  .scales {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

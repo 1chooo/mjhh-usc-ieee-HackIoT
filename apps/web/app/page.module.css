@@ -73,6 +73,30 @@
   line-height: 1.6;
 }
 
+.prototype {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.prototype p {
+  max-width: 64ch;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.liveLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  font-size: 1rem;
+}
+
 @media (max-width: 800px) {
   .hero {
     padding-top: 2rem;

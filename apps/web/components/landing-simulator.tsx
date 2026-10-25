@@ -287,8 +287,9 @@ export function LandingSimulator() {
             />
           </div>
           <p>
-            An illustrative fixed thermostat is compared with our model under
-            the same room conditions for the selected span. Electricity =
+            This energy illustration compares a fixed thermostat with a
+            comfort-aware thermal policy, separate from the Pi’s learning model,
+            under the same room conditions for the selected span. Electricity =
             thermal load ÷ COP. Cost = electricity × rate. CO₂e = electricity ×
             grid factor. The rate starts at LADWP R-1A Zone 1 Tier 1 for
             November, the month the simulator starts and the price of the first

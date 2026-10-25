@@ -15,9 +15,11 @@ The dev server listens on [http://localhost:3000](http://localhost:3000). Votes 
 
 ## Landing comparison
 
-`LandingSimulator` uses the same `evaluate` function and room presets as the full simulator. Its traditional baseline holds the room-type midpoint (22.5°C for classrooms, 23.5°C for libraries). The adaptive policy responds to occupancy, schedule, and comfort votes; temperature and humidity also inform its current heat/cool/hold call. This is a rule-based demo with illustrative readings, not trained-model inference or live HVAC control.
+`LandingSimulator` uses `lib/thermal.ts` and illustrative room presets. Its traditional baseline holds the room-type midpoint (22.5°C for classrooms, 23.5°C for libraries). The adaptive policy responds to occupancy, schedule, and comfort votes; temperature and humidity also inform its heat/cool/hold call. This rule-based energy illustration is separate from the Pi learning model in `apps/alg/acmodel.py` and the web port in `lib/ac-model.ts`. It does not measure their energy performance or control live HVAC.
 
-The connected `ScaleStory` extends the selected room's result to 1–1,000 similar rooms for the same modeled hour. Room, home, neighborhood, and campus options illustrate scale; their room counts are editable examples, not typical building sizes. All rooms repeat the current scenario and assumptions, so the totals are a linear illustration rather than a building forecast. Extra energy use scales up too.
+The connected `ScaleStory` extends the selected room's result to 1–1,000 similar rooms for the selected modeled span. Room, home, neighborhood, and campus options illustrate scale; their room counts are editable examples, not typical building sizes. All rooms repeat the current scenario and assumptions over that span, so the totals are a linear illustration rather than a building forecast. Extra energy use scales up too.
+
+The homepage explains the implemented camera → Pi learning model → Supabase → dashboard path and links to `/vote` and `/dashboard` for a hardware walkthrough. Physical AC actuation remains unfinished in `apps/alg/main.py::set_ac`. See [the judging guide](../../docs/judging-guide.md) for the rubric assessment and demonstration story.
 
 The existing thermal model estimates steady-state heating/cooling load from the building envelope and body heat. `compareEnergyImpact` converts that thermal kWh to electrical kWh by dividing by the coefficient of performance (COP), then multiplies by the electricity rate and grid carbon factor. Both methods use the same room, conditions, duration, and equipment assumptions. Negative savings remain visible when comfort uses more energy.
 

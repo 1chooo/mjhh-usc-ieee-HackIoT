@@ -53,6 +53,12 @@ export function ScaleStory({
           <br />
           Imagine a thousand.
         </h2>
+        <p>
+          Start with one room, then a home, a neighborhood, a campus. When a
+          useful energy-saving decision repeats across more spaces, small
+          reductions can add up to lower bills and a smaller shared carbon
+          footprint.
+        </p>
       </div>
 
       <div
@@ -124,6 +130,11 @@ export function ScaleStory({
       </div>
 
       <div className={styles.foot}>
+        <p>
+          These totals repeat the current room and conditions across the
+          selected spaces and time. They are estimates, not measured building
+          savings.
+        </p>
         <Link className="text-link" href="/impact">
           Impact <span aria-hidden="true">↗</span>
         </Link>

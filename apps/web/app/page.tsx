@@ -1,18 +1,19 @@
+import Link from "next/link";
 import { LandingSimulator } from "../components/landing-simulator";
 import styles from "./page.module.css";
 
 const mechanism = [
   {
-    title: "Sense the room.",
-    body: "Combine occupancy, indoor and outdoor temperature, humidity, and hot or cold votes.",
+    title: "Count the people.",
+    body: "A camera estimates headcount on a Raspberry Pi. A DHT11 records room temperature.",
   },
   {
-    title: "Respond to people.",
-    body: "Keep occupied rooms within a comfort band. Relax the target when a room is empty or closed.",
+    title: "Learn from comfort.",
+    body: "Hot and cold votes refine the headcount-based target. The model remembers preferences for recurring groups.",
   },
   {
-    title: "Make the impact visible.",
-    body: "Compare the same room at a fixed temperature with our model. See the difference in electricity, cost, and CO₂e.",
+    title: "Show the decision.",
+    body: "The Pi publishes readings and recommended setpoints to Supabase. The dashboard follows each cycle.",
   },
 ];
 
@@ -27,9 +28,9 @@ export default function Home() {
           </span>
         </h1>
         <p className="lede">
-          An empty classroom and a full reading room need different responses.
-          MJHH brings room conditions and people’s feedback into one model
-          for heating and cooling.
+          Cooling should follow the people in the room. MJHH combines
+          camera-based headcounts and comfort feedback to recommend AC targets
+          and explore the potential savings in energy, money, and carbon.
         </p>
         <div className="cta-row">
           <a className="button" href="#demo">
@@ -52,9 +53,9 @@ export default function Home() {
             The thermostat should, too.
           </h2>
           <p className="lede">
-            Holding one temperature can mean cooling an empty room or keeping a
-            class colder than people want. Our model adapts the target to who is
-            there and how they feel, then calls for heat, cool, or hold.
+            A headcount shows how busy a room is. It cannot tell us whether
+            people feel too cold. MJHH learns from both headcounts and comfort
+            votes, so recurring groups can get a more suitable target.
           </p>
         </div>
         <ol className={styles.steps}>
@@ -65,6 +66,20 @@ export default function Home() {
             </li>
           ))}
         </ol>
+        <div className={styles.prototype}>
+          <p>
+            The prototype recommends setpoints. Physical AC control and measured
+            energy savings are the next validation steps.
+          </p>
+          <div className={styles.liveLinks}>
+            <Link className="text-link" href="/vote">
+              Try a comfort vote ↗
+            </Link>
+            <Link className="text-link" href="/dashboard">
+              Follow the room ↗
+            </Link>
+          </div>
+        </div>
       </section>
 
       <LandingSimulator />
