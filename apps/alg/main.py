@@ -21,8 +21,7 @@ MODEL_PATH = os.path.join(HERE, "yolo26n.onnx")   # see camera_number_detection.
 CONF = 0.4                       # detection confidence: lower = fewer missed people, more false hits
 DHT_PIN = "D4"                   # DHT11 data pin: GPIO4 = physical pin 7
 DHT_READINGS = 3                 # average this many good readings (the DHT11 needs ~2 s between reads)
-TEST_INTERVAL = 9               # seconds between cycles for testing; None = real hourly schedule
-VOTE_WINDOW = TEST_INTERVAL      # read_votes counts votes from the last this many seconds; None = since the last record
+TEST_INTERVAL = 30              # testing: seconds to vote before each cycle; None = real hourly schedule
 
 _counter = None
 _dht = None
@@ -52,7 +51,7 @@ def db(method: str, path: str, body: dict | None = None):
         f"{SUPABASE_URL}/rest/v1{path}",
         method=method,
         data=None if body is None else json.dumps(body).encode(),
-        headers={"apikey": SUPABASE_KEY, "Content-Type": "application/json"},
+        headers={"apikey": SUPABASE_KEY, "Content-Type": "application/json", "Prefer": "return=representation"},
     )
     with urllib.request.urlopen(req, timeout=10) as res:
         text = res.read()
@@ -92,14 +91,18 @@ def read_temperature() -> float | None:
     return sum(readings) / len(readings) if readings else None
 
 
-def read_votes() -> tuple[int, int]:
-    """Votes from the last VOTE_WINDOW seconds (or since the last record) -> (hot, cold)."""
-    if VOTE_WINDOW:
-        since = (datetime.now(timezone.utc) - timedelta(seconds=VOTE_WINDOW)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    else:
-        last = db("GET", "/record?select=created_at&order=created_at.desc&limit=1")
-        since = last[0]["created_at"].replace("+", "%2B") if last else "1970-01-01T00:00:00Z"
-    votes = db("GET", f"/vote?select=is_hot&created_at=gt.{since}")
+def q(ts: str) -> str:
+    """Timestamp for a REST filter: '+' in '+00:00' would be read as a space."""
+    return ts.replace("+", "%2B")
+
+
+def read_votes(until: str | None = None) -> tuple[int, int]:
+    """Votes since the record before `until` (or the newest record if `until` is None) up to `until` -> (hot, cold).
+    So every vote lands in exactly one cycle: the one whose record comes right after it."""
+    before = f"&created_at=lt.{q(until)}" if until else ""
+    last = db("GET", f"/record?select=created_at&order=created_at.desc&limit=1{before}")
+    since = q(last[0]["created_at"]) if last else "1970-01-01T00:00:00Z"
+    votes = db("GET", f"/vote?select=is_hot&created_at=gt.{since}" + (f"&created_at=lte.{q(until)}" if until else ""))
     hot = sum(1 for v in votes if v["is_hot"])
     return hot, len(votes) - hot
 
@@ -118,18 +121,25 @@ def run_cycle(model: SimpleModel, timestamp: str | None = None):
     except Exception as e:               # temperature is only logged, so a sensor problem must not stop the AC update
         print(f"  read_temperature failed: {e!r}")
         temp = None
-    hot, cold = read_votes()
-    # n = 60 if n == 1 else 70
+    try:                                 # the record marks the end of this cycle's vote window
+        until = db("POST", "/record", {"ppl": n, "temp_c": temp})[0]["created_at"]
+    except Exception as e:
+        print(f"  saving the record failed: {e!r}")
+        until = None                     # fall back to: votes since the newest record, up to now
+    try:
+        hot, cold = read_votes(until)
+    except Exception as e:               # no votes is still a valid input, so keep going
+        print(f"  read_votes failed: {e!r}")
+        hot, cold = 0, 0
     hot, cold = min(hot, n), min(cold, max(n - min(hot, n), 0))   # model rejects hot + cold > n_people
     
     target = model.update(n, hot, cold, timestamp)
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] {n} people, {'n/a' if temp is None else f'{temp:.1f}'} C, hot {hot} / cold {cold} -> {target} C")
     print(set_ac(target))
-    try:                                 # a network problem must not stop the AC update either
-        db("POST", "/record", {"ppl": n, "temp_c": temp})
+    try:                                 # a network problem must not stop the AC update
         db("POST", "/setpoint", {"target_c": target})
     except Exception as e:
-        print(f"  saving to the database failed: {e!r}")
+        print(f"  saving the setpoint failed: {e!r}")
 
 
 
@@ -147,19 +157,33 @@ def next_run(now: datetime, minute: int) -> datetime:
     return t if t > now else t + timedelta(hours=1)
 
 
+def vote_countdown(seconds: int):
+    """Show the vote window on the Pi's terminal, with the live count, before the sensors run."""
+    for left in range(seconds, 0, -1):
+        try:
+            hot, cold = read_votes()
+            tally = f"hot {hot} / cold {cold}"
+        except Exception:
+            tally = "count unavailable"
+        print(f"\r  vote now: {left:3d} s left ({tally})   ", end="", flush=True)
+        time.sleep(1)
+    print("\r  voting closed" + " " * 40)
+
+
 def test_loop():
-    """Every TEST_INTERVAL seconds, as if one hour had passed (the model learns per hour, so a real
-    timestamp would pile every 10 s reading into the same hour). Nothing is saved to STATE_FILE."""
+    """Each cycle: show the simulated time -> TEST_INTERVAL seconds to vote -> sensors and model, as if
+    one hour had passed (the model learns per hour, so a real timestamp would pile every reading into
+    the same hour). Nothing is saved to STATE_FILE."""
     model = SimpleModel(ROOM_ID)
     fake = datetime.now().replace(minute=RUN_MINUTE, second=0, microsecond=0)
     while True:
+        print(f"\n(simulated time {fake:%a %H:%M})")
+        vote_countdown(TEST_INTERVAL)
         try:
-            print(f"(simulated time {fake:%a %H:%M})")
             run_cycle(model, fake.isoformat())
         except Exception as e:
             print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] run_cycle failed: {e!r}")
         fake += timedelta(hours=1)
-        time.sleep(TEST_INTERVAL)
 
 
 def main():
