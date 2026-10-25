@@ -1623,3 +1623,135 @@ body:has(.sim-shell) .colophon {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.vote-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.vote-side {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 360px;
+  padding: 24px 16px;
+  border: 0;
+  border-radius: 28px;
+  color: white;
+  box-shadow: 0 18px 40px -18px var(--glow);
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.3s ease,
+    filter 0.3s ease;
+}
+
+.vote-side.cold {
+  --glow: oklch(0.55 0.15 245);
+  background: linear-gradient(160deg, oklch(0.78 0.12 220), oklch(0.5 0.16 260));
+}
+
+.vote-side.hot {
+  --glow: oklch(0.62 0.19 40);
+  background: linear-gradient(160deg, oklch(0.85 0.15 80), oklch(0.6 0.2 30));
+}
+
+.vote-side::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at 30% 20%, rgb(255 255 255 / 0.35), transparent 45%);
+  pointer-events: none;
+  transition: transform 0.6s ease;
+}
+
+.vote-side:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 28px 60px -18px var(--glow);
+}
+
+.vote-side:hover::before {
+  transform: translate(10%, 10%);
+}
+
+.vote-side:active {
+  transform: scale(0.96);
+}
+
+.vote-icon {
+  width: clamp(72px, 14vw, 120px);
+  height: auto;
+  filter: drop-shadow(0 6px 12px rgb(0 0 0 / 0.18));
+}
+
+.vote-side.cold .vote-icon {
+  animation: vote-spin 12s linear infinite;
+}
+
+.vote-side.hot .vote-icon {
+  animation: vote-pulse 2.4s ease-in-out infinite;
+}
+
+.vote-side strong {
+  font-size: clamp(2.2rem, 7vw, 4rem);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.vote-side span {
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.vote-side[aria-pressed="true"] {
+  outline: 4px solid white;
+  outline-offset: -10px;
+  animation: vote-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.vote-side[aria-pressed="true"] span {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.25);
+  opacity: 1;
+}
+
+.vote-side:not([aria-pressed="true"]):has(~ [aria-pressed="true"]),
+[aria-pressed="true"] ~ .vote-side {
+  filter: saturate(0.4) brightness(0.9);
+}
+
+.vote-side:disabled {
+  cursor: progress;
+  filter: brightness(0.9);
+}
+
+@keyframes vote-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes vote-pulse {
+  50% {
+    transform: scale(1.1) rotate(8deg);
+  }
+}
+
+@keyframes vote-pop {
+  40% {
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vote-side,
+  .vote-side .vote-icon {
+    animation: none;
+    transition: none;
+  }
+}
