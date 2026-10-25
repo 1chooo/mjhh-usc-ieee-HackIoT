@@ -3,7 +3,7 @@ import { RoomBoard } from "../../components/console/room-board";
 
 export const metadata: Metadata = {
   title: "Rooms",
-  description: "Library and classroom status for the shared demo hour.",
+  description: "Live room temperature, people, votes, and setpoint.",
 };
 
 export default function RoomsPage() {

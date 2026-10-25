@@ -3,8 +3,7 @@ import { ImpactView } from "../../components/impact-view";
 
 export const metadata: Metadata = {
   title: "Impact",
-  description:
-    "Shared demo of one simulated hour against a fixed setpoint. Not a utility bill.",
+  description: "Dollars saved in the live room.",
 };
 
 export default function ImpactPage() {

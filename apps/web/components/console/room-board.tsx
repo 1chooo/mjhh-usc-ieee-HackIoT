@@ -1,68 +1,134 @@
 "use client";
 
-import { useState } from "react";
-import { defaultReadings } from "../../lib/campus";
 import {
-  filterRooms,
-  searchRooms,
-  summarizeCampus,
-  type ActionFilter,
-  type KindFilter,
-} from "../../lib/campus-summary";
-import { RoomAlerts } from "./room-alerts";
-import { RoomFilters } from "./room-filters";
-import { RoomStream } from "./room-stream";
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { useLiveRoom } from "../../lib/use-live-room";
+import { Card, CardContent } from "../ui/card";
 import { StatGrid } from "./stat-grid";
 
+const tooltipStyle = {
+  background: "var(--card)",
+  border: "1px solid var(--line)",
+  borderRadius: 4,
+  color: "var(--ink)",
+};
+
+const axisTick = { fill: "var(--muted)", fontSize: 12 };
+const grid = "var(--line)";
+
+function formatTemp(tempC: number | null): string {
+  return tempC == null ? "—" : `${tempC.toFixed(1)}°C`;
+}
+
+function formatWhen(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function RoomBoard() {
-  const summary = summarizeCampus(defaultReadings);
-  const [kind, setKind] = useState<KindFilter>("all");
-  const [action, setAction] = useState<ActionFilter>("all");
-  const [query, setQuery] = useState("");
-  const [dismissed, setDismissed] = useState<string[]>([]);
-  const rooms = searchRooms(filterRooms(summary.rooms, kind, action), query);
-  const alerts = summary.alerts.filter((alert) => !dismissed.includes(alert.id));
-  const open = summary.rooms.filter((room) => room.reading.scheduledOpen).length;
+  const { room, error } = useLiveRoom();
+  const points = [...(room?.history ?? [])].reverse().map((row) => ({
+    at: row.created_at,
+    temp: row.temp_c,
+    people: row.ppl,
+  }));
 
   return (
     <div className="stack">
       <h1>Rooms</h1>
-      <StatGrid
-        items={[
-          { label: "Rooms", value: String(summary.roomCount) },
-          { label: "Open", value: String(open) },
-          { label: "People", value: String(Math.round(summary.openPeople)) },
-          {
-            label: "Calls",
-            value: `${summary.cool} cool · ${summary.heat} heat · ${summary.hold} hold`,
-          },
-        ]}
-      />
-      <RoomFilters
-        kind={kind}
-        action={action}
-        onKind={setKind}
-        onAction={setAction}
-        onClear={() => {
-          setKind("all");
-          setAction("all");
-        }}
-      />
-      <RoomAlerts
-        alerts={alerts}
-        onDismiss={(id) =>
-          setDismissed((current) =>
-            current.includes(id) ? current : [...current, id],
-          )
-        }
-      />
-      <RoomStream
-        rooms={rooms}
-        query={query}
-        onQuery={setQuery}
-        variant="status"
-        hrefFor={(spaceId) => `/rooms/${spaceId}`}
-      />
+      {room == null && error == null ? <p className="note">Loading…</p> : null}
+      {error ? (
+        <p className="note" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {room ? (
+        <>
+          <StatGrid
+            items={[
+              {
+                label: "Temperature",
+                value: room.record ? formatTemp(room.record.temp_c) : "—",
+              },
+              {
+                label: "People",
+                value: room.record ? String(room.record.ppl) : "—",
+              },
+              {
+                label: "Setpoint",
+                value: room.setpoint
+                  ? `${room.setpoint.target_c.toFixed(1)}°C`
+                  : "—",
+              },
+              {
+                label: "Votes",
+                value: `${room.hot} hot · ${room.cold} cold`,
+              },
+            ]}
+          />
+          <Card className="border-border bg-card shadow-none">
+            <CardContent
+              className="h-72"
+              role="img"
+              aria-label="Temperature and people"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={points}>
+                  <CartesianGrid stroke={grid} vertical={false} />
+                  <XAxis
+                    dataKey="at"
+                    tick={axisTick}
+                    tickFormatter={formatWhen}
+                    minTickGap={28}
+                  />
+                  <YAxis yAxisId="temp" tick={axisTick} width={48} unit="°" />
+                  <YAxis
+                    yAxisId="people"
+                    orientation="right"
+                    tick={axisTick}
+                    width={32}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelFormatter={(label) => formatWhen(String(label))}
+                  />
+                  <Legend />
+                  <Line
+                    yAxisId="temp"
+                    dataKey="temp"
+                    name="°C"
+                    stroke="var(--ink)"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                  <Line
+                    yAxisId="people"
+                    dataKey="people"
+                    name="People"
+                    stroke="var(--cold)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { LandingSimulator } from "../components/landing-simulator";
-import { spaces } from "../lib/campus";
 import styles from "./page.module.css";
 
 const mechanism = [
@@ -70,20 +68,6 @@ export default function Home() {
       </section>
 
       <LandingSimulator />
-
-      <section className="section">
-        <h2>Explore the rooms.</h2>
-        <ul className="room-index">
-          {spaces.map((space) => (
-            <li key={space.id}>
-              <Link href={`/rooms/${space.id}`}>
-                <strong>{space.name}</strong>
-                <span className="meta">{space.building}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }

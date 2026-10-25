@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { loadRoom, type RoomLive, type RoomRecord } from "../lib/supabase-rest";
+import { type RoomLive, type RoomRecord } from "../lib/supabase-rest";
+import { useLiveRoom } from "../lib/use-live-room";
 import { StatGrid } from "./console/stat-grid";
 import { VoteMeter } from "./result-block";
 
@@ -78,38 +78,16 @@ function RecentRecords({ records }: { records: RoomRecord[] }) {
 }
 
 export function AdminDashboard() {
-  const [room, setRoom] = useState<RoomLive | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function refresh() {
-      try {
-        const next = await loadRoom();
-        if (!cancelled) {
-          setRoom(next);
-          setError(null);
-        }
-      } catch (cause) {
-        if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : String(cause));
-        }
-      }
-    }
-
-    void refresh();
-    const timer = setInterval(() => void refresh(), 3000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, []);
+  const { room, error } = useLiveRoom();
 
   const latestSaving = room?.savings[room.savings.length - 1];
   const latestUsd = latestSaving ? Number(latestSaving.saved_usd) : Number.NaN;
   const savedTone =
-    room == null || room.totalUsd === 0 ? undefined : room.totalUsd > 0 ? "save" : "spend";
+    room == null || room.totalUsd === 0
+      ? undefined
+      : room.totalUsd > 0
+        ? "save"
+        : "spend";
 
   return (
     <div className="stack">
@@ -128,7 +106,9 @@ export function AdminDashboard() {
           </button>
         </div>
       </div>
-      {room == null && error == null ? <p className="note">Loading the room…</p> : null}
+      {room == null && error == null ? (
+        <p className="note">Loading the room…</p>
+      ) : null}
       {error ? (
         <p className="note" role="alert">
           {error}
@@ -140,7 +120,9 @@ export function AdminDashboard() {
             items={[
               {
                 label: "Temperature",
-                value: room.record ? formatTemp(room.record.temp_c) : "No reading",
+                value: room.record
+                  ? formatTemp(room.record.temp_c)
+                  : "No reading",
               },
               {
                 label: "People",
@@ -148,7 +130,9 @@ export function AdminDashboard() {
               },
               {
                 label: "Setpoint",
-                value: room.setpoint ? `${room.setpoint.target_c.toFixed(1)}°C` : "No target",
+                value: room.setpoint
+                  ? `${room.setpoint.target_c.toFixed(1)}°C`
+                  : "No target",
               },
               {
                 label: "Saved",
@@ -161,7 +145,9 @@ export function AdminDashboard() {
             {Number.isFinite(latestUsd)
               ? `Latest cycle ${formatUsd(latestUsd)}`
               : "No savings yet."}
-            {room.record ? ` · Reading ${formatWhen(room.record.created_at)}` : ""}
+            {room.record
+              ? ` · Reading ${formatWhen(room.record.created_at)}`
+              : ""}
           </p>
           <VoteMeter hot={room.hot} cold={room.cold} />
           <h2>Recent readings</h2>
