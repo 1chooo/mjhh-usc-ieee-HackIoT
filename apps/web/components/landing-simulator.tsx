@@ -8,6 +8,7 @@ import {
   defaultImpactAssumptions,
   type ImpactAssumptions,
 } from "../lib/energy-impact";
+import { IMPACT_SPANS } from "../lib/scale-savings";
 import { evaluate, type Scenario } from "../lib/thermal";
 import styles from "./landing-simulator.module.css";
 import { ScaleStory } from "./scale-story";
@@ -33,6 +34,9 @@ export function LandingSimulator() {
   );
   const result = evaluate(scenario);
   const impact = compareEnergyImpact(result, assumptions);
+  const span =
+    IMPACT_SPANS.find((item) => item.hours === scenario.hours) ??
+    IMPACT_SPANS[0]!;
   const peak = Math.max(
     impact.baseline.electricityKwh,
     impact.adaptive.electricityKwh,
@@ -82,7 +86,10 @@ export function LandingSimulator() {
               aria-pressed={presetId === preset.id}
               onClick={() => {
                 setPresetId(preset.id);
-                setScenario({ ...preset.scenario });
+                setScenario((current) => ({
+                  ...preset.scenario,
+                  hours: current.hours,
+                }));
               }}
             >
               {preset.label}
@@ -189,7 +196,12 @@ export function LandingSimulator() {
 
             <div className={styles.energy}>
               <div className={styles.energyHeading}>
-                <h3>Estimated electricity · 1 hour</h3>
+                <DurationControl
+                  hours={scenario.hours}
+                  onChange={(hours) =>
+                    setScenario((current) => ({ ...current, hours }))
+                  }
+                />
                 <span className={deltaClass}>
                   {equal
                     ? "Same use"
@@ -241,20 +253,6 @@ export function LandingSimulator() {
                 </dd>
               </div>
             </dl>
-            <p className={styles.response}>
-              {!scenario.scheduledOpen
-                ? "The room is closed, so the model relaxes the target and ignores comfort votes."
-                : !result.peoplePresent
-                  ? "With nobody to condition the room for, the model relaxes the target."
-                  : increased
-                    ? "Comfort needs more energy in this scenario. The comparison includes that tradeoff."
-                    : scenario.coldVotes > scenario.hotVotes &&
-                        result.season === "cooling"
-                      ? "People feel cold. Raising the cooling target reduces modeled energy use."
-                      : scenario.hotVotes > scenario.coldVotes
-                        ? "People feel hot. Their votes move the target within the room’s comfort band."
-                        : "The model holds the comfort target until occupancy or feedback calls for a change."}
-            </p>
           </div>
         </div>
 
@@ -290,11 +288,11 @@ export function LandingSimulator() {
           </div>
           <p>
             An illustrative fixed thermostat is compared with our model under
-            the same room conditions for one hour. Electricity = thermal load ÷
-            COP. Cost = electricity × rate. CO₂e = electricity × grid factor.
-            The rate starts at LADWP R-1A Zone 1 Tier 1 for November, the month
-            the simulator starts and the price of the first 700 kWh on each
-            bill. COP and the grid factor stay illustrative.
+            the same room conditions for the selected span. Electricity =
+            thermal load ÷ COP. Cost = electricity × rate. CO₂e = electricity ×
+            grid factor. The rate starts at LADWP R-1A Zone 1 Tier 1 for
+            November, the month the simulator starts and the price of the first
+            700 kWh on each bill. COP and the grid factor stay illustrative.
           </p>
           <p>
             This steady-state estimate excludes fan power, humidity removal,
@@ -304,8 +302,41 @@ export function LandingSimulator() {
           </p>
         </details>
       </section>
-      <ScaleStory impact={impact} />
+      <ScaleStory impact={impact} spanLabel={span.label} />
     </>
+  );
+}
+
+function DurationControl({
+  hours,
+  onChange,
+}: {
+  hours: number;
+  onChange: (hours: number) => void;
+}) {
+  const id = useId();
+  const index = IMPACT_SPANS.findIndex((item) => item.hours === hours);
+  const selected = IMPACT_SPANS[index === -1 ? 0 : index]!;
+  return (
+    <div className={styles.duration}>
+      <label htmlFor={id}>
+        <output htmlFor={id}>{selected.label}</output>
+      </label>
+      <input
+        id={id}
+        type="range"
+        min={0}
+        max={IMPACT_SPANS.length - 1}
+        step={1}
+        value={index === -1 ? 0 : index}
+        aria-label="Time"
+        aria-valuetext={selected.label}
+        onChange={(event) => {
+          const next = IMPACT_SPANS[Number(event.target.value)];
+          if (next) onChange(next.hours);
+        }}
+      />
+    </div>
   );
 }
 

@@ -229,15 +229,35 @@
 
 .energyHeading {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
   font-size: 0.85rem;
 }
 
-.energyHeading h3 {
+.duration output {
   font-size: inherit;
   font-weight: 500;
+}
+
+.duration {
+  flex: 1;
+  min-width: 0;
+}
+
+.duration label {
+  display: flex;
+  margin-bottom: 4px;
+}
+
+.duration input {
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--save);
+  cursor: pointer;
 }
 
 .energyHeading > span {
@@ -317,15 +337,6 @@
 
 .increase {
   color: var(--spend);
-}
-
-.response {
-  min-height: 2.8em;
-  margin-top: 19px;
-  color: var(--muted);
-  font-size: 0.85rem;
-  line-height: 1.5;
-  max-width: 60ch;
 }
 
 .assumptions {

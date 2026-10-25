@@ -11,10 +11,6 @@
 }
 
 .intro {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  align-items: end;
-  gap: 32px 64px;
   width: 100%;
 }
 
@@ -23,13 +19,6 @@
   font-size: clamp(2.5rem, 4.6vw, 4.25rem);
   line-height: 1.05;
   letter-spacing: -0.035em;
-}
-
-.intro p {
-  max-width: 44ch;
-  color: var(--scale-muted);
-  font-size: 1.05rem;
-  line-height: 1.65;
 }
 
 .scales {
@@ -120,16 +109,9 @@
   display: block;
   width: 100%;
   height: 32px;
-  margin: 8px 0 12px;
+  margin: 8px 0 0;
   cursor: pointer;
   accent-color: var(--scale-green);
-}
-
-.roomCount p {
-  max-width: 42ch;
-  color: var(--scale-muted);
-  font-size: 0.9rem;
-  line-height: 1.6;
 }
 
 .results h3 {
@@ -174,19 +156,10 @@
 
 .foot {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px 40px;
+  justify-content: flex-end;
   width: 100%;
   padding-top: 24px;
   border-top: 1px solid var(--scale-line);
-}
-
-.foot p {
-  max-width: 86ch;
-  color: var(--scale-muted);
-  font-size: 0.8rem;
-  line-height: 1.6;
 }
 
 .foot a {
@@ -196,11 +169,6 @@
 }
 
 @media (max-width: 1000px) {
-  .intro {
-    grid-template-columns: 1fr 1fr;
-    gap: 32px;
-  }
-
   .projection {
     grid-template-columns: 1fr;
     gap: 28px;
@@ -217,17 +185,6 @@
 
 @media (max-width: 700px) {
   .story {
-    gap: 28px;
-    padding-top: 4rem;
-    padding-bottom: 4rem;
-  }
-
-  .intro {
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
-
-  .scales {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -258,11 +215,6 @@
 
   .results dd {
     font-size: 1.65rem;
-  }
-
-  .foot {
-    align-items: flex-start;
-    flex-direction: column;
   }
 }
 

@@ -3,6 +3,7 @@ import test from "node:test";
 import { OPENING_TIER1_RATE } from "../lib/billing.ts";
 import { defaultImpactAssumptions } from "../lib/energy-impact.ts";
 import {
+  IMPACT_SPANS,
   SCALE_CAP_HOURS,
   SCALE_RATE,
   YEAR_HOURS,
@@ -23,6 +24,17 @@ test("one room for one hour is that hour's saved power times the rate", () => {
 
 test("keeps a negative saving negative", () => {
   assert.equal(scaleDollars(4, -0.5, 0.25, 10), -5);
+});
+
+test("landing spans run from an hour to a year", () => {
+  assert.deepEqual(
+    IMPACT_SPANS.map((span) => span.hours),
+    [1, 24, 24 * 7, 24 * 30, YEAR_HOURS],
+  );
+  assert.deepEqual(
+    IMPACT_SPANS.map((span) => span.label),
+    ["1 hour", "1 day", "1 week", "1 month", "1 year"],
+  );
 });
 
 test("starts at one hour, reaches a day in a few seconds, and caps at ten years", () => {

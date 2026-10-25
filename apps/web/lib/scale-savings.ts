@@ -7,6 +7,15 @@ export const YEAR_HOURS = 24 * 365.25;
 /** The bird's-eye clock stops here. */
 export const SCALE_CAP_HOURS = 10 * YEAR_HOURS;
 
+/** Landing comparison. `hours` is written to `scenario.hours`; `label` is the slider output. */
+export const IMPACT_SPANS = [
+  { hours: 1, label: "1 hour" },
+  { hours: 24, label: "1 day" },
+  { hours: 24 * 7, label: "1 week" },
+  { hours: 24 * 30, label: "1 month" },
+  { hours: YEAR_HOURS, label: "1 year" },
+] as const;
+
 /** Real milliseconds from one hour to about one day. */
 const DAY_MS = 4000;
 const GROWTH_PER_MS = Math.log(24) / DAY_MS;
