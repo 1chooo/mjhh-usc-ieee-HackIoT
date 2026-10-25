@@ -1,7 +1,10 @@
 """Test the Supabase REST API described in ../API.md against the live project.
 
-Creates a throwaway room (test-xxxxxx), runs every documented call with both
-keys, checks the access rules and constraints, then deletes everything it made.
+Runs every documented call with both keys and checks the access rules and
+constraints. The backend serves one room, so the test writes into the live
+tables, keeps the ids of every row it adds, and deletes exactly those rows at
+the end. Existing data is left alone, but run it while the Pi isn't writing:
+a row that lands mid-run would change the "latest" values it checks.
 
     python3 apps/backend/tests/test_api.py
 
@@ -15,14 +18,16 @@ import os
 import sys
 import urllib.error
 import urllib.request
-import uuid
-from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
+from urllib.parse import quote
 
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 DEFAULT_URL = "https://avcqkyfobsalzdzzgvqm.supabase.co"
+TABLES = ("vote", "record", "setpoint", "saving")
 
 failures = []
+created = {table: [] for table in TABLES}
 
 
 def load_env():
@@ -36,18 +41,21 @@ def load_env():
 
 
 def call(url, key, method, path, body=None):
+    headers = {"apikey": key, "Content-Type": "application/json"}
+    if method == "POST":
+        headers["Prefer"] = "return=representation"  # get the new row back, so its id can be cleaned up
     req = urllib.request.Request(
         url.rstrip("/") + "/rest/v1" + path,
         method=method,
         data=None if body is None else json.dumps(body).encode(),
-        headers={"apikey": key, "Content-Type": "application/json"},
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as res:
             status, raw = res.status, res.read()
     except urllib.error.HTTPError as err:
         status, raw = err.code, err.read()
-    return status, json.loads(raw) if raw else None
+    return status, json.loads(raw, parse_float=Decimal) if raw else None  # Decimal keeps saved_usd exact
 
 
 def check(name, ok, got=None):
@@ -65,83 +73,106 @@ def expect(name, res, status, code=None):
     return body
 
 
-def run(pub, sec, room):
-    only_room = f"?room_id=eq.{room}"
+def track(table, res):
+    """Remember the ids of rows a request created, even one that was expected to fail."""
+    status, body = res
+    if status == 201 and isinstance(body, list):
+        created[table] += [row["id"] for row in body]
+    return res
 
-    print("room")
-    expect("secret key creates a room", sec("POST", "/room", {"id": room, "name": "API test"}), 201)
-    expect("publishable key can't create a room", pub("POST", "/room", {"id": f"{room}-x", "name": "x"}), 401, "42501")
-    rows = expect("publishable key lists rooms", pub("GET", f"/room?id=eq.{room}"), 200)
-    check("the new room is listed", rows == [{"id": room, "name": "API test"}], rows)
 
-    print("\nroom_now (empty room)")
-    rows = expect("publishable key reads room_now", pub("GET", f"/room_now{only_room}"), 200)
-    row = rows[0] if rows else {}
-    check(
-        "no readings and no votes yet",
-        row.get("ppl") is None and row.get("temp_c") is None and row.get("hot_count") == 0 and row.get("cold_count") == 0,
-        row,
+def add(name, client, table, row):
+    """Insert one row that should succeed, and remember its id for cleanup."""
+    body = expect(name, track(table, client("POST", f"/{table}", row)), 201)
+    return body[0] if isinstance(body, list) and body else {}
+
+
+def latest(pub, table):
+    rows = pub("GET", f"/{table}?order=created_at.desc&limit=1")[1]
+    return rows[0] if isinstance(rows, list) and rows else {}
+
+
+def run(pub, sec):
+    print("removed")
+    for name in ("room_now", "occupancy_reading", "temp_reading"):
+        expect(f"{name} is gone", pub("GET", f"/{name}"), 404, "PGRST205")
+    for column in ("hot_count", "cold_count"):
+        res = track("record", sec("POST", "/record", {"ppl": 1, column: 1}))
+        expect(f"record has no {column} column", res, 400, "PGRST204")
+
+    print("\none Pi cycle")
+    first = add("secret key saves a record without a temperature", sec, "record", {"ppl": 5, "temp_c": None})
+    check("it has only id, ppl, temp_c and created_at, with temp_c null", set(first) == {"id", "ppl", "temp_c", "created_at"} and first["temp_c"] is None, first)
+    add("publishable key casts a hot vote", pub, "vote", {"is_hot": True})
+    add("publishable key casts a cold vote", pub, "vote", {"is_hot": False})
+    first_at = quote(first.get("created_at", "1970-01-01T00:00:00Z"))  # '+00:00' must not become a space
+    rows = expect("publishable key reads the votes since that record", pub("GET", f"/vote?created_at=gt.{first_at}&select=id"), 200)
+    check("they're exactly the two new votes", sorted(v["id"] for v in rows or []) == sorted(created["vote"]), rows)
+    second = add("secret key saves the next record", sec, "record", {"ppl": 7, "temp_c": 23.5})
+    row = latest(pub, "record")
+    check("publishable key reads it as the latest record", row.get("id") == second.get("id") and row.get("ppl") == 7 and row.get("temp_c") == Decimal("23.5"), row)
+    second_at = quote(second.get("created_at", "1970-01-01T00:00:00Z"))
+    rows = expect(
+        "publishable key reads the votes between the two records",
+        pub("GET", f"/vote?created_at=gt.{first_at}&created_at=lte.{second_at}&select=is_hot"),
+        200,
     )
+    hot = sum(1 for v in rows or [] if v["is_hot"])
+    check("that cycle counted hot 1 / cold 1", (hot, len(rows or []) - hot) == (1, 1), rows)
 
-    print("\nvote")
-    expect("publishable key casts a hot vote", pub("POST", "/vote", {"room_id": room, "is_hot": True}), 201)
-    expect("publishable key casts a cold vote", pub("POST", "/vote", {"room_id": room, "is_hot": False}), 201)
+    print("\nvote rules")
     expect(
         "publishable key can't backdate a vote",
-        pub("POST", "/vote", {"room_id": room, "is_hot": True, "created_at": "2020-01-01T00:00:00Z"}),
+        pub("POST", "/vote", {"is_hot": True, "created_at": "2020-01-01T00:00:00Z"}),
         401,
         "42501",
     )
-    expect("vote for an unknown room is rejected", pub("POST", "/vote", {"room_id": "no-such-room", "is_hot": True}), 409, "23503")
-    expect("vote without is_hot is rejected", pub("POST", "/vote", {"room_id": room}), 400, "23502")
-    old = (datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()
-    expect("secret key adds an 11-minute-old vote", sec("POST", "/vote", {"room_id": room, "is_hot": True, "created_at": old}), 201)
-    votes = expect("publishable key lists the room's votes", pub("GET", f"/vote{only_room}&order=created_at.desc"), 200)
-    check("3 votes listed", isinstance(votes, list) and len(votes) == 3, votes)
+    expect("vote without is_hot is rejected", pub("POST", "/vote", {}), 400, "23502")
+    vote_id = created["vote"][0] if created["vote"] else 0
+    expect("publishable key can't change a vote", pub("PATCH", f"/vote?id=eq.{vote_id}", {"is_hot": False}), 401, "42501")
+    expect("publishable key can't delete a vote", pub("DELETE", f"/vote?id=eq.{vote_id}"), 401, "42501")
+    expect("secret key changes a vote", sec("PATCH", f"/vote?id=eq.{vote_id}", {"is_hot": False}), 204)
 
-    # change only the old vote, so the 10-minute counts checked below stay 1 hot + 1 cold
-    old_id = votes[-1]["id"] if votes else 0
-    expect("publishable key can't change a vote", pub("PATCH", f"/vote?id=eq.{old_id}", {"is_hot": False}), 401, "42501")
-    expect("publishable key can't delete a vote", pub("DELETE", f"/vote?id=eq.{old_id}"), 401, "42501")
-    expect("secret key changes a vote", sec("PATCH", f"/vote?id=eq.{old_id}", {"is_hot": False}), 204)
+    print("\nrecord rules")
+    expect("publishable key can't add a record", pub("POST", "/record", {"ppl": 1}), 401, "42501")
+    record_id = second.get("id", 0)
+    expect("publishable key can't change a record", pub("PATCH", f"/record?id=eq.{record_id}", {"ppl": 0}), 401, "42501")
+    expect("publishable key can't delete a record", pub("DELETE", f"/record?id=eq.{record_id}"), 401, "42501")
+    expect("secret key fixes a record", sec("PATCH", f"/record?id=eq.{record_id}", {"ppl": 8}), 204)
 
-    print("\noccupancy_reading / temp_reading")
-    expect("publishable key can't add a people count", pub("POST", "/occupancy_reading", {"room_id": room, "ppl": 1}), 401, "42501")
-    expect("publishable key can't add a temperature", pub("POST", "/temp_reading", {"room_id": room, "temp_c": 20}), 401, "42501")
-    expect("secret key adds a people count", sec("POST", "/occupancy_reading", {"room_id": room, "ppl": 3}), 201)
-    expect("secret key adds a newer people count", sec("POST", "/occupancy_reading", {"room_id": room, "ppl": 7}), 201)
-    expect("secret key adds a temperature", sec("POST", "/temp_reading", {"room_id": room, "temp_c": 23.5}), 201)
-    rows = expect("publishable key reads the latest people count", pub("GET", f"/occupancy_reading{only_room}&order=created_at.desc&limit=1"), 200)
-    check("latest people count is 7", bool(rows) and rows[0]["ppl"] == 7, rows)
-    rows = expect("publishable key reads temperature history", pub("GET", f"/temp_reading{only_room}&order=created_at.asc"), 200)
-    check("1 temperature reading", isinstance(rows, list) and len(rows) == 1, rows)
+    print("\nsetpoint")
+    expect("publishable key can't add a target", pub("POST", "/setpoint", {"target_c": 22}), 401, "42501")
+    add("secret key adds a target", sec, "setpoint", {"target_c": 22.5})
+    newer = add("secret key adds a newer target", sec, "setpoint", {"target_c": 23})
+    row = latest(pub, "setpoint")
+    check("publishable key reads 23 as the latest target", row.get("id") == newer.get("id") and row.get("target_c") == 23, row)
+
+    print("\nsaving")
+    expect("publishable key can't add a saving", pub("POST", "/saving", {"saved_usd": 1}), 401, "42501")
+    add("secret key adds a saving of $0.0750", sec, "saving", {"saved_usd": 0.075})
+    add("secret key adds a negative saving of -$0.0125", sec, "saving", {"saved_usd": -0.0125})
+    ids = ",".join(map(str, created["saving"]))
+    rows = expect("publishable key reads them back", pub("GET", f"/saving?id=in.({ids})&select=saved_usd"), 200)
+    total = sum(Decimal(str(r["saved_usd"])) for r in rows or [])
+    check("they add up to exactly $0.0625", total == Decimal("0.0625"), rows)
 
     print("\nconstraints")
-    expect("negative people count is rejected", sec("POST", "/occupancy_reading", {"room_id": room, "ppl": -1}), 400, "23514")
-    expect("temperature of 200 °C is rejected", sec("POST", "/temp_reading", {"room_id": room, "temp_c": 200}), 400, "23514")
-    expect("room id with uppercase and '/' is rejected", sec("POST", "/room", {"id": "Bad/Id", "name": "x"}), 400, "23514")
-    expect("duplicate room id is rejected", sec("POST", "/room", {"id": room, "name": "again"}), 409, "23505")
-
-    print("\nroom_now (with data)")
-    rows = expect("publishable key reads room_now", pub("GET", f"/room_now{only_room}"), 200)
-    row = rows[0] if rows else {}
-    check("shows the latest people count (7)", row.get("ppl") == 7, row)
-    check("shows the latest temperature (23.5)", row.get("temp_c") == 23.5, row)
-    check("counts 1 hot + 1 cold, ignoring the 11-minute-old vote", row.get("hot_count") == 1 and row.get("cold_count") == 1, row)
-
-    print("\nroom update / delete")
-    expect("publishable key can't rename the room", pub("PATCH", f"/room?id=eq.{room}", {"name": "x"}), 401, "42501")
-    expect("secret key renames the room", sec("PATCH", f"/room?id=eq.{room}", {"name": "API test renamed"}), 204)
-    expect("a room that still has rows can't be deleted", sec("DELETE", f"/room?id=eq.{room}"), 409, "23503")
+    expect("negative people count is rejected", track("record", sec("POST", "/record", {"ppl": -1})), 400, "23514")
+    expect("temperature of 200 °C is rejected", track("record", sec("POST", "/record", {"ppl": 1, "temp_c": 200})), 400, "23514")
+    expect("record without ppl is rejected", track("record", sec("POST", "/record", {"temp_c": 22})), 400, "23502")
+    expect("target outside 16–30 °C is rejected", track("setpoint", sec("POST", "/setpoint", {"target_c": 35})), 400, "23514")
+    expect("saving without saved_usd is rejected", track("saving", sec("POST", "/saving", {})), 400, "23502")
 
 
-def cleanup(pub, sec, room):
+def cleanup(pub, sec):
     print("\ncleanup")
-    for table in ("vote", "occupancy_reading", "temp_reading"):
-        expect(f"secret key deletes test rows from {table}", sec("DELETE", f"/{table}?room_id=eq.{room}"), 204)
-    expect("secret key deletes the test room", sec("DELETE", f"/room?id=eq.{room}"), 204)
-    rows = expect("publishable key confirms it's gone", pub("GET", f"/room?id=eq.{room}"), 200)
-    check("test room no longer listed", rows == [], rows)
+    for table in TABLES:
+        if not created[table]:
+            continue
+        ids = ",".join(map(str, created[table]))
+        expect(f"secret key deletes {len(created[table])} test row(s) from {table}", sec("DELETE", f"/{table}?id=in.({ids})"), 204)
+        rows = expect(f"publishable key confirms they're gone from {table}", pub("GET", f"/{table}?id=in.({ids})"), 200)
+        check(f"no test rows left in {table}", rows == [], rows)
 
 
 def main():
@@ -158,12 +189,11 @@ def main():
     def sec(*args):
         return call(url, sec_key, *args)
 
-    room = f"test-{uuid.uuid4().hex[:6]}"
-    print(f"Testing {url} with throwaway room '{room}'\n")
+    print(f"Testing {url}\n")
     try:
-        run(pub, sec, room)
+        run(pub, sec)
     finally:
-        cleanup(pub, sec, room)
+        cleanup(pub, sec)
 
     print(f"\n{len(failures)} check(s) failed" if failures else "\nAll checks passed")
     return 1 if failures else 0

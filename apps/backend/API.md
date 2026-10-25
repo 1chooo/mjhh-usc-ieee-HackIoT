@@ -2,6 +2,8 @@
 
 There's no custom server. Supabase generates a REST API from the tables in [DBSCHEMA.md](DBSCHEMA.md), and the database's access rules decide which key can do what. Call it with plain HTTP from any language, or with `supabase-js` / `supabase-py`.
 
+The backend serves a single room, so no call takes a room or location.
+
 ## Connecting
 
 **Base URL:** `https://avcqkyfobsalzdzzgvqm.supabase.co/rest/v1`
@@ -11,7 +13,7 @@ There's no custom server. Supabase generates a REST API from the tables in [DBSC
 | Key | Looks like | Use it in | Can do |
 | --- | --- | --- | --- |
 | Publishable | `sb_publishable_…` | Vote page, dashboard (browser) | Read everything, cast votes |
-| Secret | `sb_secret_…` | YOLO script, device-gateway, admin scripts | Everything |
+| Secret | `sb_secret_…` | Raspberry Pi (`apps/alg`), admin scripts | Everything |
 
 Both keys are in the Supabase Dashboard under **Project Settings → API Keys**. Never put the secret key in browser code or in a `NEXT_PUBLIC_*` variable.
 
@@ -22,7 +24,7 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 ```
 
 ```python
-# YOLO script (.env: SUPABASE_URL, SUPABASE_SECRET_KEY)
+# Raspberry Pi (.env: SUPABASE_URL, SUPABASE_SECRET_KEY)
 from supabase import create_client
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SECRET_KEY"])
 ```
@@ -31,83 +33,96 @@ sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SECRET_KEY"]
 
 | Resource | Read | Create | Update | Delete |
 | --- | --- | --- | --- | --- |
-| `room_now` (view) | publishable | — | — | — |
-| `room` | publishable | secret | secret | secret |
-| `vote` | publishable | **publishable** (`room_id`, `is_hot` only) | secret | secret |
-| `occupancy_reading` | publishable | secret | secret | secret |
-| `temp_reading` | publishable | secret | secret | secret |
+| `record` | publishable | secret | secret | secret |
+| `vote` | publishable | **publishable** (`is_hot` only) | secret | secret |
+| `setpoint` | publishable | secret | secret | secret |
+| `saving` | publishable | secret | secret | secret |
 
 Anything the publishable key can do, the secret key can do too.
 
-## `room_now`: current state of every room
+## `record`: one snapshot per Pi cycle
 
-Read-only. This is the main endpoint for the dashboard and the algorithm.
+The newest row holds the room's current readings. This is the main endpoint for the dashboard.
 
-| Operation | REST | supabase-js |
-| --- | --- | --- |
-| All rooms | `GET /room_now` | `supabase.from("room_now").select("*")` |
-| One room | `GET /room_now?room_id=eq.lab-101` | `supabase.from("room_now").select("*").eq("room_id", "lab-101").single()` |
+| Operation | REST | supabase-js | Key |
+| --- | --- | --- | --- |
+| Current state | `GET /record?order=created_at.desc&limit=1` | `.from("record").select("*").order("created_at", { ascending: false }).limit(1).single()` | publishable |
+| History since a time | `GET /record?created_at=gte.2026-10-24T19:00:00Z&order=created_at.asc` | `.from("record").select("*").gte("created_at", since).order("created_at")` | publishable |
+| Save a snapshot | `POST /record` `{"ppl": 36, "temp_c": 21.4}` | `.from("record").insert({ ppl: 36, temp_c: 21.4 })` | secret |
+| Fix / delete one | `PATCH` / `DELETE /record?id=eq.42` | `.update({ ppl: 35 }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
 
 ```json
-[{ "room_id": "lab-101", "name": "Lab 101",
-   "ppl": 12, "ppl_at": "2026-10-24T20:51:03.12+00:00",
-   "temp_c": 24.5, "temp_at": "2026-10-24T20:50:58.40+00:00",
-   "hot_count": 3, "cold_count": 1 }]
+[{ "id": 13, "ppl": 36, "temp_c": 21.4, "created_at": "2026-10-25T08:10:00.12+00:00" }]
 ```
 
-`ppl` and `temp_c` are `null` until the first reading arrives. `hot_count` and `cold_count` cover the last 10 minutes.
+- `ppl` is required and must be 0 or more.
+- `temp_c` can be `null` (the DHT11 read failed). Otherwise it must be between −40 and 85 °C.
+- There are no vote counts here. They come from `vote`, below.
 
-## `room`
+## `vote`: the vote inbox
 
-| Operation | REST | supabase-js | Key |
-| --- | --- | --- | --- |
-| List | `GET /room` | `.from("room").select("*")` | publishable |
-| Create | `POST /room` `{"id": "lab-101", "name": "Lab 101"}` | `.from("room").insert({ id: "lab-101", name: "Lab 101" })` | secret |
-| Rename | `PATCH /room?id=eq.lab-101` `{"name": "Lab 101A"}` | `.from("room").update({ name: "Lab 101A" }).eq("id", "lab-101")` | secret |
-| Delete | `DELETE /room?id=eq.lab-101` | `.from("room").delete().eq("id", "lab-101")` | secret |
-
-The database starts with no rooms. Create them with the secret key, or in the Dashboard's SQL editor: `insert into room (id, name) values ('lab-101', 'Lab 101');`. A room id can only contain lowercase letters, digits and `-`, because it's also the MQTT `deviceId`. You can't delete a room that still has votes or readings, so delete those first.
-
-## `vote`
+The vote page drops one row per tap here. Votes are grouped by time: the votes after the latest `record` are the live count for the next cycle, and a past cycle counted the votes between its `record` and the one before it.
 
 | Operation | REST | supabase-js | Key |
 | --- | --- | --- | --- |
-| Cast a vote | `POST /vote` `{"room_id": "lab-101", "is_hot": true}` | `.from("vote").insert({ room_id: "lab-101", is_hot: true })` | publishable |
-| Recent votes for a room | `GET /vote?room_id=eq.lab-101&created_at=gt.2026-10-24T20:00:00Z&order=created_at.desc` | `.from("vote").select("*").eq("room_id", "lab-101").gt("created_at", since).order("created_at", { ascending: false })` | publishable |
-| Change one | `PATCH /vote?id=eq.42` `{"is_hot": false}` | `.from("vote").update({ is_hot: false }).eq("id", 42)` | secret |
-| Delete one | `DELETE /vote?id=eq.42` | `.from("vote").delete().eq("id", 42)` | secret |
+| Cast a vote | `POST /vote` `{"is_hot": true}` | `.from("vote").insert({ is_hot: true })` | publishable |
+| Votes since the latest record | `GET /vote?created_at=gt.<latest record's created_at>&select=is_hot` | `.from("vote").select("is_hot").gt("created_at", latestAt)` | publishable |
+| Votes a past cycle counted | `GET /vote?created_at=gt.<previous record's created_at>&created_at=lte.<that record's created_at>&select=is_hot` | `.select("is_hot").gt("created_at", previousAt).lte("created_at", recordAt)` | publishable |
+| Change / delete one | `PATCH` / `DELETE /vote?id=eq.42` | `.update({ is_hot: false }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
 
-`is_hot: true` means hot and `false` means cold. The database sets `id` and `created_at`. A vote that includes `created_at` and is sent with the publishable key is rejected.
+Count them on the client: rows with `is_hot: true` are hot, the rest are cold. The database sets `id` and `created_at`. A vote that includes `created_at` and is sent with the publishable key is rejected.
 
-## `occupancy_reading`
+## `setpoint`: the model's target temperature
+
+One row per prediction by the model in `apps/alg`.
 
 | Operation | REST | supabase-js | Key |
 | --- | --- | --- | --- |
-| Add a reading | `POST /occupancy_reading` `{"room_id": "lab-101", "ppl": 7}` | `.from("occupancy_reading").insert({ room_id: "lab-101", ppl: 7 })` | secret |
-| Add several | `POST /occupancy_reading` `[{…}, {…}]` | `.insert([{ … }, { … }])` | secret |
-| Latest for a room | `GET /occupancy_reading?room_id=eq.lab-101&order=created_at.desc&limit=1` | `.from("occupancy_reading").select("*").eq("room_id", "lab-101").order("created_at", { ascending: false }).limit(1)` | publishable |
-| History since a time | `GET /occupancy_reading?room_id=eq.lab-101&created_at=gte.2026-10-24T19:00:00Z&order=created_at.asc` | `.select("*").eq("room_id", "lab-101").gte("created_at", since).order("created_at")` | publishable |
-| Fix one | `PATCH /occupancy_reading?id=eq.42` `{"ppl": 8}` | `.update({ ppl: 8 }).eq("id", 42)` | secret |
-| Delete one | `DELETE /occupancy_reading?id=eq.42` | `.delete().eq("id", 42)` | secret |
+| Latest | `GET /setpoint?order=created_at.desc&limit=1` | `.from("setpoint").select("*").order("created_at", { ascending: false }).limit(1)` | publishable |
+| History since a time | `GET /setpoint?created_at=gte.2026-10-24T19:00:00Z&order=created_at.asc` | `.select("*").gte("created_at", since).order("created_at")` | publishable |
+| Save a prediction | `POST /setpoint` `{"target_c": 22.5}` | `.from("setpoint").insert({ target_c: 22.5 })` | secret |
+| Fix / delete one | `PATCH` / `DELETE /setpoint?id=eq.42` | `.update({ target_c: 23 }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
 
-`ppl` must be 0 or more.
+`target_c` must be between 16 and 30 °C, the same range the model clamps to.
+
+## `saving`: dollars saved per cycle
+
+One row per cycle with the money saved in that cycle, compared with a fixed setpoint. It's negative when the policy used more.
+
+| Operation | REST | supabase-js | Key |
+| --- | --- | --- | --- |
+| All rows | `GET /saving?select=saved_usd,created_at&order=created_at.asc` | `.from("saving").select("saved_usd, created_at").order("created_at")` | publishable |
+| Since a time | `GET /saving?created_at=gte.2026-10-25T00:00:00Z` | `.select("*").gte("created_at", since)` | publishable |
+| Save one | `POST /saving` `{"saved_usd": 0.0125}` | `.from("saving").insert({ saved_usd: 0.0125 })` | secret |
+| Fix / delete one | `PATCH` / `DELETE /saving?id=eq.42` | `.update({ saved_usd: 0.01 }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
+
+`saved_usd` keeps 4 decimal places, because a cycle's savings are often a fraction of a cent. There's no total column: add the rows up on the client. A request returns at most 1,000 rows, which is about 41 days of hourly cycles.
+
+```ts
+const { data } = await supabase.from("saving").select("saved_usd");
+const totalUsd = (data ?? []).reduce((sum, row) => sum + Number(row.saved_usd), 0);
+```
+
+## The Pi's cycle (`apps/alg/main.py`)
+
+`run_cycle` already gathers everything `record` needs. Read the votes from the inbox, then save the three rows after the model runs:
 
 ```python
-sb.table("occupancy_reading").insert({"room_id": "lab-101", "ppl": n}).execute()
+def read_votes() -> tuple[int, int]:
+    """Votes cast since the last saved record -> (hot, cold)."""
+    last = sb.table("record").select("created_at").order("created_at", desc=True).limit(1).execute().data
+    since = last[0]["created_at"] if last else "1970-01-01T00:00:00Z"
+    votes = sb.table("vote").select("is_hot").gt("created_at", since).execute().data
+    hot = sum(1 for v in votes if v["is_hot"])
+    return hot, len(votes) - hot
+
+# in run_cycle, after target = model.update(...)
+sb.table("record").insert({"ppl": n, "temp_c": temp}).execute()
+sb.table("setpoint").insert({"target_c": target}).execute()
+sb.table("saving").insert({"saved_usd": saved}).execute()   # saved: your estimate for this cycle
 ```
 
-## `temp_reading`
-
-Same operations as `occupancy_reading`, with `temp_c` in place of `ppl`.
-
-| Operation | REST | supabase-js | Key |
-| --- | --- | --- | --- |
-| Add a reading | `POST /temp_reading` `{"room_id": "lab-101", "temp_c": 23.4}` | `.from("temp_reading").insert({ room_id: "lab-101", temp_c: 23.4 })` | secret |
-| Latest for a room | `GET /temp_reading?room_id=eq.lab-101&order=created_at.desc&limit=1` | `.from("temp_reading").select("*").eq("room_id", "lab-101").order("created_at", { ascending: false }).limit(1)` | publishable |
-| History since a time | `GET /temp_reading?room_id=eq.lab-101&created_at=gte.2026-10-24T19:00:00Z&order=created_at.asc` | `.select("*").eq("room_id", "lab-101").gte("created_at", since).order("created_at")` | publishable |
-| Fix / delete one | `PATCH` / `DELETE /temp_reading?id=eq.42` | `.update({ temp_c: 23.0 }).eq("id", 42)` / `.delete().eq("id", 42)` | secret |
-
-`temp_c` must be between −40 and 85 °C.
+A vote cast in the second between counting and saving the record is missed by the model. That's fine for comfort votes.
 
 ## Filters and options
 
@@ -115,13 +130,13 @@ Same operations as `occupancy_reading`, with `temp_c` in place of `ppl`.
 | --- | --- | --- |
 | Equal / not equal | `col=eq.x` / `col=neq.x` | `.eq()` / `.neq()` |
 | Greater / less than | `col=gt.x`, `gte`, `lt`, `lte` | `.gt()`, `.gte()`, `.lt()`, `.lte()` |
-| One of several | `col=in.(lab-101,lab-102)` | `.in("col", [...])` |
+| One of several | `id=in.(41,42,43)` | `.in("id", [41, 42, 43])` |
 | Sort | `order=created_at.desc` | `.order("created_at", { ascending: false })` |
 | Page | `limit=50&offset=100` | `.range(100, 149)` |
-| Only some columns | `select=room_id,ppl` | `.select("room_id, ppl")` |
+| Only some columns | `select=ppl,created_at` | `.select("ppl, created_at")` |
 | Get the new row back after insert | header `Prefer: return=representation` | `.insert({...}).select()` |
 
-A request returns at most 1,000 rows. At one YOLO reading every 5 seconds, that's about 80 minutes of history for one room.
+In a raw URL, encode a timestamp's `+00:00` as `%2B00:00`, or use `Z`. Otherwise the `+` turns into a space.
 
 ## Errors
 
@@ -129,23 +144,23 @@ Error bodies look like `{"code": "...", "message": "...", "details": "..."}`.
 
 | HTTP | `code` | Meaning |
 | --- | --- | --- |
-| 401 | `42501` | This key isn't allowed to do that. For example, the publishable key writing a reading, or sending `created_at` with a vote. |
-| 409 | `23503` | `room_id` doesn't exist, or you're deleting a room that still has rows. |
-| 409 | `23505` | That room id already exists. |
-| 400 | `23514` | A value is out of range: `ppl < 0`, `temp_c` outside −40..85, or a room id with uppercase letters, spaces or `/`. |
-| 400 | `23502` | A required field is missing. |
+| 401 | `42501` | This key isn't allowed to do that. For example, the publishable key writing a record, or sending `created_at` with a vote. |
+| 400 | `23514` | A value is out of range: negative `ppl`, `temp_c` outside −40..85, or `target_c` outside 16..30. |
+| 400 | `23502` | A required field is missing (`ppl`, `is_hot`, `target_c`, `saved_usd`). |
+| 400 | `PGRST204` | A column that doesn't exist, for example `hot_count` on `record`. Vote counts come from `vote`. |
 
 ## Live updates
 
-Views can't be subscribed to, so listen to the tables and refetch `room_now` whenever something lands.
+Each new `record` row has the latest readings, so the dashboard can show it straight from the event. New `vote` rows add to the live count, which starts over at zero when the next `record` arrives:
 
 ```ts
 supabase
-  .channel("room-now")
-  .on("postgres_changes", { event: "INSERT", schema: "public", table: "vote" }, refetch)
-  .on("postgres_changes", { event: "INSERT", schema: "public", table: "occupancy_reading" }, refetch)
-  .on("postgres_changes", { event: "INSERT", schema: "public", table: "temp_reading" }, refetch)
+  .channel("live")
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "record" }, ({ new: row }) => setCurrent(row))
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "vote" }, ({ new: row }) => countVote(row))
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "setpoint" }, ({ new: row }) => setTarget(row))
+  .on("postgres_changes", { event: "INSERT", schema: "public", table: "saving" }, ({ new: row }) => addSaving(row))
   .subscribe();
 ```
 
-Add `filter: "room_id=eq.lab-101"` to any of them to follow a single room.
+The gateway can listen to `setpoint` the same way, and forward each new `target_c` to the AC.
