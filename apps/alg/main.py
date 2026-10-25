@@ -2,39 +2,65 @@
 Every hour at RUN_MINUTE: count people -> read temperature -> read votes -> model.update() -> set the AC.
 Optionally at PRESET_MINUTE: model.next_hour() presets the AC for the class coming next.
 '''
+import os
 import time
 from datetime import datetime, timedelta
 
 from acmodel import SimpleModel
 
+HERE = os.path.dirname(os.path.abspath(__file__))   # so it works no matter which folder you start it from
+
 ROOM_ID = "R101"
-STATE_FILE = f"{ROOM_ID}.json"   # the model remembers what it learned across restarts
+STATE_FILE = os.path.join(HERE, f"{ROOM_ID}.json")   # the model remembers what it learned across restarts
 RUN_MINUTE = 30                  # main task: after the vote closes
 PRESET_MINUTE = 45               # ~15 min before the next hour; set to None to disable
 CAMERA_SOURCE = 0                # camera index, video file or RTSP URL
-TEST_INTERVAL = 10               # seconds between cycles for testing; None = real hourly schedule
+MODEL_PATH = os.path.join(HERE, "yolo26n.onnx")   # see camera_number_detection.py for how to export it
+CONF = 0.4                       # detection confidence: lower = fewer missed people, more false hits
+DHT_PIN = "D4"                   # DHT11 data pin: GPIO4 = physical pin 7
+DHT_READINGS = 3                 # average this many good readings (the DHT11 needs ~2 s between reads)
+TEST_INTERVAL = 9               # seconds between cycles for testing; None = real hourly schedule
 
 _counter = None
+_dht = None
 
 
 # ---------------------------------------------------------------------- inputs
 def count_people() -> int:
-    """Camera -> current head count (YOLO model is loaded once, camera only opened while counting)."""
+    """Camera -> current head count (ONNX model is loaded once, camera only opened while counting).
+    Takes a few frames and returns the median, so one bad frame doesn't skew it."""
     global _counter
     if _counter is None:
         from camera_number_detection import PeopleCounter
-        _counter = PeopleCounter(CAMERA_SOURCE)
+        _counter = PeopleCounter(CAMERA_SOURCE, model=MODEL_PATH, conf=CONF)
     return _counter.count()
 
 
-def read_temperature() -> float:
-    """Room temperature in C (not a model input, logged only). TODO: real sensor."""
-    return 24.0
+def read_temperature() -> float | None:
+    """DHT11 -> room temperature in C (not a model input, logged only). None if every read failed."""
+    global _dht
+    if _dht is None:
+        import adafruit_dht
+        import board
+        _dht = adafruit_dht.DHT11(getattr(board, DHT_PIN), use_pulseio=False)
+        time.sleep(2)                    # let the sensor settle
+    readings = []
+    for _ in range(DHT_READINGS * 3):    # DHT11 reads fail often; allow some retries
+        try:
+            t = _dht.temperature
+            if t is not None:
+                readings.append(t)
+        except RuntimeError:
+            pass                         # failed read, just try again
+        if len(readings) >= DHT_READINGS:
+            break
+        time.sleep(2.1)                  # faster calls only return the cached value
+    return sum(readings) / len(readings) if readings else None
 
 
 def read_votes() -> tuple[int, int]:
     """Vote result for this hour -> (hot, cold). TODO: real vote source."""
-    return 20, 30
+    return 2, 0
 
 
 def set_ac(target: float):
@@ -46,12 +72,18 @@ def set_ac(target: float):
 # ---------------------------------------------------------------------- the periodic tasks
 def run_cycle(model: SimpleModel, timestamp: str | None = None):
     n = count_people()
-    temp = read_temperature()
+    try:
+        temp = read_temperature()
+    except Exception as e:               # temperature is only logged, so a sensor problem must not stop the AC update
+        print(f"  read_temperature failed: {e!r}")
+        temp = None
     hot, cold = read_votes()
+    # n = 60 if n == 1 else 70
     hot, cold = min(hot, n), min(cold, max(n - min(hot, n), 0))   # model rejects hot + cold > n_people
+    
     target = model.update(n, hot, cold, timestamp)
-    print(f"[{datetime.now():%Y-%m-%d %H:%M}] {n} people, {temp:.1f} C, hot {hot} / cold {cold} -> {target} C")
-    set_ac(target)
+    print(f"[{datetime.now():%Y-%m-%d %H:%M}] {n} people, {'n/a' if temp is None else f'{temp:.1f}'} C, hot {hot} / cold {cold} -> {target} C")
+    print(set_ac(target))
 
 
 def run_preset(model: SimpleModel):
@@ -60,6 +92,7 @@ def run_preset(model: SimpleModel):
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] preset for next hour ({n} people) -> {target}")
     if target is not None:
         set_ac(target)
+
 
 
 def next_run(now: datetime, minute: int) -> datetime:
@@ -97,8 +130,6 @@ def main():
             print(f"[{datetime.now():%Y-%m-%d %H:%M}] {job.__name__} failed: {e!r}")
 
 
+
 if __name__ == "__main__":
     main()
-'''
-room_id
-'''

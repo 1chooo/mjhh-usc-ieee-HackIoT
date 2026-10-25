@@ -1,0 +1,5 @@
+# Raspberry Pi runtime for main.py (no torch / ultralytics needed)
+onnxruntime
+opencv-python-headless
+numpy
+adafruit-circuitpython-dht
