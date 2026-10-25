@@ -1243,10 +1243,6 @@ legend {
     padding-right: 20px;
   }
 
-  .sim-toolbar {
-    width: calc(100% - 8.5rem);
-  }
-
   .hero h1 span {
     white-space: normal;
   }
@@ -1340,29 +1336,36 @@ body:has(.sim-shell) .colophon {
   position: absolute;
   inset: 0;
   z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  align-content: start;
+  column-gap: 12px;
+  row-gap: 10px;
+  padding: 6.25rem 16px 0 20px;
   pointer-events: none;
 }
 
 .sim-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 6.25rem 20px 0;
+  display: contents;
 }
 
 .sim-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  grid-column: 1;
+  grid-row: 1;
   gap: 10px;
-  width: calc(100% - 9rem);
+  width: auto;
 }
 
 .sim-tags {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  grid-column: 1 / -1;
+  grid-row: 2;
   gap: 10px;
   width: 100%;
 }
@@ -1444,29 +1447,42 @@ body:has(.sim-shell) .colophon {
 }
 
 .sim-corner {
-  position: absolute;
-  top: 6.25rem;
-  right: 16px;
+  position: relative;
   z-index: 3;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: flex-end;
+  grid-column: 2;
+  grid-row: 1;
   gap: 8px;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
   pointer-events: auto;
 }
 
-/* Scale-up formula: $/day × rooms × days = total */
+/* Scale-up formula: rooms × saved kW × $/kWh × time */
 .sim-scale {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px 4px 14px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  max-width: 100%;
+  padding: 6px 8px 6px 14px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 18px;
   background: color-mix(in oklch, var(--card) 92%, transparent);
   backdrop-filter: blur(12px);
   color: var(--muted);
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+}
+
+.sim-scale-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .sim-scale-rate {
@@ -1517,13 +1533,53 @@ body:has(.sim-shell) .colophon {
   color: var(--spend);
 }
 
+.sim-scale-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sim-scale-pause {
+  min-height: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.sim-scale-pause[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.sim-scale-pause:focus-visible {
+  outline: 2px solid var(--cold);
+  outline-offset: 1px;
+}
+
+.sim-scale-note {
+  margin: 0;
+  max-width: 46rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
 
 
 
 .sim-drawer {
   pointer-events: auto;
   position: absolute;
-  top: 10.75rem;
+  top: var(--controls-h, 14rem);
   right: 16px;
   bottom: calc(var(--dock-h, 15.5rem) + 28px); /* above the bottom dock (16px inset + 12px gap) */
   z-index: 2;
@@ -1593,7 +1649,7 @@ body:has(.sim-shell) .colophon {
 
 @media (max-width: 800px) {
   .sim-drawer {
-    top: 10.5rem;
+    top: var(--controls-h, 18rem);
     right: 12px;
     bottom: 12px;
     left: 12px;
@@ -2263,27 +2319,36 @@ body:has(.sim-shell) .colophon {
 
 /* Narrow screens: the scale box takes its own row above the toolbar, so nothing overlaps. */
 @media (max-width: 800px) {
+  .sim-overlay {
+    grid-template-columns: 1fr;
+  }
+
+  .sim-toolbar {
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .sim-tags {
+    grid-row: 3;
+  }
+
   .sim-corner {
-    left: 12px;
-    right: 12px;
     flex-wrap: wrap;
     justify-content: flex-end;
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
   }
 
   .sim-scale {
     width: 100%;
+  }
+
+  .sim-scale-row {
     justify-content: space-between;
   }
 
   .sim-scale input {
     width: 3.5rem;
-  }
-
-  .sim-top {
-    padding-top: 9.4rem;
-  }
-
-  .sim-drawer {
-    top: 13.75rem;
   }
 }

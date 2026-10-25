@@ -1,26 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { OPENING_TIER1_RATE } from "../lib/billing.ts";
 import {
   compareEnergyImpact,
   defaultImpactAssumptions,
 } from "../lib/energy-impact.ts";
 
+const rate = defaultImpactAssumptions.electricityRate;
+
 test("converts thermal load to electricity before calculating cost and emissions", () => {
   const impact = compareEnergyImpact({ baselineKwh: 12, adaptiveKwh: 6 });
 
+  assert.equal(rate, OPENING_TIER1_RATE);
   assert.deepEqual(impact.baseline, {
     electricityKwh: 4,
-    cost: 1,
+    cost: 4 * rate,
     emissionsKg: 1.6,
   });
   assert.deepEqual(impact.adaptive, {
     electricityKwh: 2,
-    cost: 0.5,
+    cost: 2 * rate,
     emissionsKg: 0.8,
   });
   assert.deepEqual(impact.saved, {
     electricityKwh: 2,
-    cost: 0.5,
+    cost: 2 * rate,
     emissionsKg: 0.8,
   });
   assert.equal(impact.savedPct, 50);
@@ -30,7 +34,7 @@ test("preserves increased energy, cost, and emissions instead of hiding them", (
   const impact = compareEnergyImpact({ baselineKwh: 6, adaptiveKwh: 12 });
 
   assert.equal(impact.saved.electricityKwh, -2);
-  assert.equal(impact.saved.cost, -0.5);
+  assert.equal(impact.saved.cost, -2 * rate);
   assert.equal(impact.saved.emissionsKg, -0.8);
   assert.equal(impact.savedPct, -100);
 });
@@ -62,7 +66,7 @@ test("uses shared editable assumptions for both policies", () => {
   assert.equal(impact.savedPct, 50);
   assert.deepEqual(defaultImpactAssumptions, {
     cop: 3,
-    electricityRate: 0.25,
+    electricityRate: OPENING_TIER1_RATE,
     carbonIntensity: 0.4,
   });
 });

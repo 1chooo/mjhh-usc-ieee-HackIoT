@@ -20,6 +20,12 @@ export function tierRates(month: number): readonly [number, number, number] {
   return [0.27292, 0.33151, 0.33151];
 }
 
+/**
+ * Tier 1 for November, the month the simulator clock starts. One room for one hour
+ * stays inside Tier 1, so the landing comparison and the campus scale use this price.
+ */
+export const OPENING_TIER1_RATE = tierRates(11)[0];
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Two-month bills: Nov-Dec, Jan-Feb, Mar-Apr, ... (the simulation starts in November). */

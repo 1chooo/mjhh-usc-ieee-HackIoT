@@ -259,14 +259,16 @@ export function LandingSimulator() {
         </div>
 
         <details className={styles.assumptions}>
-          <summary>Assumptions &amp; calculation</summary>
+          <summary>
+            Assumptions · LADWP Tier 1 ${assumptions.electricityRate}/kWh
+          </summary>
           <div className={styles.assumptionInputs}>
             <NumberControl
-              label="Electricity · $/kWh"
+              label="LADWP Tier 1 · $/kWh"
               value={assumptions.electricityRate}
               min={0}
               max={5}
-              step={0.01}
+              step={0.00001}
               onChange={(value) => updateAssumption("electricityRate", value)}
             />
             <NumberControl
@@ -290,7 +292,9 @@ export function LandingSimulator() {
             An illustrative fixed thermostat is compared with our model under
             the same room conditions for one hour. Electricity = thermal load ÷
             COP. Cost = electricity × rate. CO₂e = electricity × grid factor.
-            Defaults are illustrative, not measured tariffs or savings.
+            The rate starts at LADWP R-1A Zone 1 Tier 1 for November, the month
+            the simulator starts and the price of the first 700 kWh on each
+            bill. COP and the grid factor stay illustrative.
           </p>
           <p>
             This steady-state estimate excludes fan power, humidity removal,

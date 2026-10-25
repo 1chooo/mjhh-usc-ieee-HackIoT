@@ -3,16 +3,19 @@ import type { ThermalResult } from "./thermal";
 export type ImpactAssumptions = {
   /** Thermal energy moved per unit of electricity used. */
   cop: number;
-  /** Dollars per electrical kWh, excluding fixed and demand charges. */
+  /** Dollars per electrical kWh. Defaults to LADWP R-1A Tier 1 for November. */
   electricityRate: number;
   /** Kilograms of CO₂e per electrical kWh. */
   carbonIntensity: number;
 };
 
-/** Illustrative inputs, not a measured equipment rating, tariff, or grid factor. */
+/**
+ * COP and the grid factor are illustrative. The rate is LADWP R-1A Tier 1 for
+ * November, kept equal to OPENING_TIER1_RATE in billing.ts.
+ */
 export const defaultImpactAssumptions: ImpactAssumptions = {
   cop: 3,
-  electricityRate: 0.25,
+  electricityRate: 0.27292,
   carbonIntensity: 0.4,
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { type Scenario } from "../lib/thermal";
 import { RoomModel } from "../lib/ac-model";
@@ -14,13 +14,21 @@ import {
   classInWeek,
   classLabel,
   firstClassAt,
-  scenarioFor,
   getSimRoom,
   simRooms,
 } from "../lib/sim-rooms";
 import { ModelPanel, type HourLog, type KnownGroup } from "./sim/model-panel";
 import { addHour, NO_TOTALS, type EnergyTotals } from "../lib/billing";
-import { arrival, clockText, dailySavingsUsd, step } from "../lib/sim-run";
+import { arrival, clockText, step } from "../lib/sim-run";
+import {
+  SCALE_RATE,
+  YEAR_HOURS,
+  acceleratedHours,
+  formatScaleDollars,
+  formatScaleKw,
+  formatScaleTime,
+  scaleDollars,
+} from "../lib/scale-savings";
 import { roomFootprint } from "./sim/layout";
 import {
   activePersonVotes,
@@ -78,6 +86,8 @@ export function SimulatorView() {
   const loopRef = useRef(0);
   const overlayRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
+  const cornerRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
   const showRef = useRef<(next: Scenario) => void>(() => {});
   const personVotesRef = useRef(personVotes);
   personVotesRef.current = personVotes;
@@ -119,13 +129,24 @@ export function SimulatorView() {
   useEffect(() => {
     const dock = dockRef.current;
     const overlay = overlayRef.current;
+    const corner = cornerRef.current;
+    const top = topRef.current;
     if (!dock || !overlay || typeof ResizeObserver === "undefined") {
       return;
     }
-    const sync = () => overlay.style.setProperty("--dock-h", `${Math.ceil(dock.getBoundingClientRect().height)}px`);
+    const controls = [corner, top?.querySelector(".sim-toolbar"), top?.querySelector(".sim-tags")].filter(
+      (node): node is HTMLElement => node instanceof HTMLElement,
+    );
+    const sync = () => {
+      const overlayTop = overlay.getBoundingClientRect().top;
+      overlay.style.setProperty("--dock-h", `${Math.ceil(dock.getBoundingClientRect().height)}px`);
+      const bottom = Math.max(0, ...controls.map((node) => node.getBoundingClientRect().bottom));
+      overlay.style.setProperty("--controls-h", `${Math.ceil(bottom - overlayTop + 12)}px`);
+    };
     sync();
     const observer = new ResizeObserver(sync);
     observer.observe(dock);
+    for (const node of controls) observer.observe(node);
     return () => observer.disconnect();
   }, []);
 
@@ -151,22 +172,12 @@ export function SimulatorView() {
   const knownGroups: KnownGroup[] = model.groups.map((g) => ({ ...g, offsetC: model.offsetFor(g.gid) }));
   const nowClass = classAt(roomDef, clockAt);
 
-  // Scale-up: one room's daily saving, times the number of rooms, times the days.
+  // Bird's-eye: rooms × this hour's saved power × $/kWh × an accelerating clock.
   const [fleetRooms, setFleetRooms] = useState("");
-  const [fleetDays, setFleetDays] = useState("30");
   const roomsN = Math.max(0, Math.floor(Number(fleetRooms) || 0));
-  const daysN = Math.max(0, Number(fleetDays) || 0);
-  const { outdoorC, humidityPct, wattsPerPerson, lossWPerM2K } = scenario;
-  // The projection runs 8 weeks of hours (about a second), so only while the fleet is on screen.
-  const scaling = roomsN > 0 && mode === "fleet";
-  const perRoomDay = useMemo(() => {
-    if (!scaling) {
-      return null;
-    }
-    const keep = { ...scenarioFor(roomDef, null, 24), outdoorC, humidityPct, wattsPerPerson, lossWPerM2K };
-    return dailySavingsUsd(roomDef, track?.room ?? UNTRAINED, track?.at ?? firstClassAt(roomDef), keep);
-  }, [scaling, roomDef, track, outdoorC, humidityPct, wattsPerPerson, lossWPerM2K]);
-  const fleetTotal = perRoomDay === null ? null : perRoomDay * roomsN * daysN;
+  const fleetActive = roomsN > 0 && mode === "fleet";
+  const hourSpan = scenario.hours > 0 ? scenario.hours : 1;
+  const savedKw = result.savedKwh / hourSpan;
   const footprint = roomFootprint(roomDef.floorAreaM2, roomDef.kind);
   const fleetShape = {
     count: Math.max(1, roomsN),
@@ -417,6 +428,9 @@ export function SimulatorView() {
     if (next === "campus") {
       pausePlayback();
     }
+    if (next !== "fleet") {
+      setFleetRooms("");
+    }
     setMode(next);
     setPick(null);
   }
@@ -431,6 +445,7 @@ export function SimulatorView() {
     setWantC(next.wantC);
     setSpaceId(id);
     setPick(null);
+    setFleetRooms("");
     setMode("room");
     easeTo(next.scenario);
   }
@@ -466,7 +481,7 @@ export function SimulatorView() {
         />
       </div>
       <div className="sim-overlay" ref={overlayRef}>
-        <div className="sim-top">
+        <div className="sim-top" ref={topRef}>
           <div className="sim-toolbar">
             <div className="choice-row">
               <button
@@ -551,50 +566,27 @@ export function SimulatorView() {
             </label>
           </div>
         </div>
-        <div className="sim-corner">
-          <div className="sim-scale" role="group" aria-label="Savings: per room per day × rooms × days">
-            <span className="sim-scale-rate" title="Average saved per room per day">
-              {perRoomDay === null ? "$—" : usd(perRoomDay)}
-              <small>/day</small>
-            </span>
-            <span aria-hidden="true">×</span>
-            <label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                step={1}
-                placeholder="0"
-                aria-label="Rooms"
-                value={fleetRooms}
-                onFocus={() => roomsN > 0 && showMode("fleet")}
-                onChange={(event) => {
-                  setFleetRooms(event.target.value);
-                  if (Number(event.target.value) > 0) {
-                    showMode("fleet");
-                  }
-                }}
-              />
-              <small>rooms</small>
-            </label>
-            <span aria-hidden="true">×</span>
-            <label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                step={1}
-                aria-label="Days"
-                value={fleetDays}
-                onChange={(event) => setFleetDays(event.target.value)}
-              />
-              <small>days</small>
-            </label>
-            <span aria-hidden="true">=</span>
-            <output className={fleetTotal !== null && fleetTotal < 0 ? "spend" : "save"} aria-live="polite">
-              {usd(fleetTotal ?? 0)}
-            </output>
-          </div>
+        <div className="sim-corner" ref={cornerRef}>
+          <ScaleFormula
+            active={fleetActive}
+            savedKw={savedKw}
+            rooms={fleetActive ? roomsN : 1}
+            roomsValue={fleetRooms}
+            onRoomsFocus={() => {
+              if (roomsN > 0) showMode("fleet");
+            }}
+            onRoomsChange={(value) => {
+              const next = Math.floor(Number(value) || 0);
+              if (next > 0) {
+                setFleetRooms(value);
+                if (mode !== "fleet") showMode("fleet");
+              } else if (mode === "fleet") {
+                showMode("room");
+              } else {
+                setFleetRooms(value);
+              }
+            }}
+          />
           <button
             type="button"
             className="ghost sim-factors"
@@ -802,8 +794,119 @@ function settle(input: Scenario): Scenario {
   return { ...input, capacity, occupancy, hotVotes, coldVotes };
 }
 
-const usd = (v: number) =>
-  `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function ScaleFormula({
+  active,
+  savedKw,
+  rooms,
+  roomsValue,
+  onRoomsChange,
+  onRoomsFocus,
+}: {
+  active: boolean;
+  savedKw: number;
+  rooms: number;
+  roomsValue: string;
+  onRoomsChange: (value: string) => void;
+  onRoomsFocus: () => void;
+}) {
+  const [paused, setPaused] = useState(false);
+  const [reduce, setReduce] = useState(false);
+  const [hours, setHours] = useState(1);
+  const elapsedRef = useRef(0);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => setReduce(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (!active) {
+      elapsedRef.current = 0;
+      setPaused(false);
+      setHours(1);
+      return;
+    }
+    if (reduce) {
+      setHours(YEAR_HOURS);
+      return;
+    }
+    if (paused) {
+      return;
+    }
+    const origin = performance.now() - elapsedRef.current;
+    let frame = 0;
+    const tick = (now: number) => {
+      elapsedRef.current = now - origin;
+      setHours(acceleratedHours(elapsedRef.current));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [active, paused, reduce]);
+
+  const shownHours = active ? hours : 1;
+  const dollars = scaleDollars(rooms, savedKw, SCALE_RATE, shownHours);
+  const racing = active && !reduce && !paused;
+
+  return (
+    <div
+      className="sim-scale"
+      role="group"
+      aria-label="Savings: rooms × kilowatts × dollars per kilowatt-hour × time"
+    >
+      <div className="sim-scale-row">
+        <label>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            placeholder="1"
+            aria-label="Rooms"
+            value={roomsValue}
+            onFocus={onRoomsFocus}
+            onChange={(event) => onRoomsChange(event.target.value)}
+          />
+          <small>rooms</small>
+        </label>
+        <span aria-hidden="true">×</span>
+        <span className="sim-scale-rate" title="Saved power this hour versus a 22°C baseline">
+          {formatScaleKw(savedKw)}
+        </span>
+        <span aria-hidden="true">×</span>
+        <span className="sim-scale-rate" title="LADWP R-1A Zone 1, Tier 1, November. The first 700 kWh of a simulator bill.">
+          ${SCALE_RATE}/kWh
+        </span>
+        <span aria-hidden="true">×</span>
+        <span className="sim-scale-time">
+          <span>{formatScaleTime(shownHours)}</span>
+          {active && !reduce ? (
+            <button
+              type="button"
+              className="sim-scale-pause"
+              aria-pressed={paused}
+              onClick={() => setPaused((current) => !current)}
+            >
+              {paused ? "Resume" : "Pause"}
+            </button>
+          ) : null}
+        </span>
+        <span aria-hidden="true">=</span>
+        <output
+          className={dollars < 0 ? "spend" : "save"}
+          aria-live={racing ? "off" : "polite"}
+          aria-label="Scaled savings"
+        >
+          {formatScaleDollars(dollars)}
+        </output>
+      </div>
+      <p className="sim-scale-note">If this hour&apos;s saving held for every room and every later hour.</p>
+    </div>
+  );
+}
 
 function Slider({
   label,
