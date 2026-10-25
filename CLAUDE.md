@@ -34,6 +34,7 @@ pip install -r requirements.txt
 python train.py --data /path/to/data.yaml [--model yolo11n.pt --epochs 50 --imgsz 640]
 
 cd apps/backend && supabase migration new <name>   # then: supabase link --project-ref avcqkyfobsalzdzzgvqm && supabase db push
+python3 apps/backend/scripts/seed.py [--reset]     # the web app's 4 rooms + 2 h of sample data (needs SUPABASE_SECRET_KEY)
 ```
 
 ## Architecture
