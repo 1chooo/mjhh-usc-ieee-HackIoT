@@ -1,12 +1,11 @@
 """Fill the database with default data.
 
 Writes two hours of sample Pi cycles, one every 10 minutes: each cycle adds a
-record (people, temperature, hot/cold vote counts), a setpoint and a saving row,
-and the vote inbox holds the votes each record counted, plus a few cast since
-the last cycle. It follows the THH 201 classroom the web app simulates
-(apps/web/lib/campus.ts): empty until a class starts 25 minutes ago, then
-over-cooled, so most votes are cold. The latest record ends at that room's
-default readings.
+record (people, temperature), a setpoint and a saving row. The vote inbox holds
+the votes cast before each cycle, plus a few cast since the last one. It follows
+the THH 201 classroom the web app simulates (apps/web/lib/campus.ts): empty
+until a class starts 25 minutes ago, then over-cooled, so most votes are cold.
+The latest cycle ends at that room's default readings.
 
     python3 apps/backend/scripts/seed.py            # stops if the tables already have rows
     python3 apps/backend/scripts/seed.py --reset    # deletes every vote, record, setpoint and saving first
@@ -24,6 +23,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 DEFAULT_URL = "https://avcqkyfobsalzdzzgvqm.supabase.co"
@@ -33,7 +33,7 @@ CYCLES = range(122, 1, -10)  # minutes ago of each Pi cycle; the last one is 2 m
 # ppl and temp are keypoints (minutes ago, value), interpolated with a little noise.
 PPL = [(122, 0), (30, 0), (25, 34), (0, 36)]
 TEMP = [(122, 23.5), (25, 23.2), (2, 21.4)]
-# votes counted by the cycle at that minute: (hot, cold); every other cycle has none
+# votes cast in the 10 minutes before the cycle at that minute: (hot, cold); other cycles get none
 VOTES = {22: (0, 2), 12: (0, 5), 2: (1, 12)}
 PENDING_VOTES = (1, 2)  # cast after the last cycle, waiting for the next one
 # model output per cycle: setback while empty, then nudged up by the cold votes
@@ -79,6 +79,11 @@ def interpolate(points, minutes_ago):
     return points[-1][1]
 
 
+def tally(votes):
+    hot = sum(1 for vote in votes if vote["is_hot"])
+    return hot, len(votes) - hot
+
+
 def build_rows(now, rng):
     rows = {table: [] for table in TABLES}
     last = CYCLES[-1]
@@ -97,11 +102,8 @@ def build_rows(now, rng):
         if m != last:
             ppl = ppl + rng.uniform(-2, 2) if ppl > 0 else 0
             temp += rng.uniform(-0.15, 0.15)
-        hot, cold = VOTES.get(m, (0, 0))
-        cast(hot, cold, m + 0.1, m + 9.9)  # inside the 10 minutes this cycle counted
-        rows["record"].append(
-            {"ppl": max(0, round(ppl)), "temp_c": round(temp, 1), "hot_count": hot, "cold_count": cold, "created_at": at(m)}
-        )
+        cast(*VOTES.get(m, (0, 0)), m + 0.1, m + 9.9)  # after the previous cycle, before this one
+        rows["record"].append({"ppl": max(0, round(ppl)), "temp_c": round(temp, 1), "created_at": at(m)})
         rows["setpoint"].append({"target_c": TARGETS.get(m, EMPTY_TARGET), "created_at": at(m)})
         rows["saving"].append({"saved_usd": SAVINGS.get(m, EMPTY_SAVING), "created_at": at(m)})
     cast(*PENDING_VOTES, 0.1, last - 0.1)
@@ -138,13 +140,15 @@ def main():
         sec("POST", f"/{table}", rows[table])
         print(f"  {len(rows[table]):>4} rows into {table}")
 
-    record = sec("GET", "/record?order=created_at.desc&limit=1")[0]
+    # the same reads the dashboard and the Pi make (API.md)
+    latest, previous = sec("GET", "/record?order=created_at.desc&limit=2")
+    last_at, prev_at = quote(latest["created_at"]), quote(previous["created_at"])
+    counted = tally(sec("GET", f"/vote?created_at=gt.{prev_at}&created_at=lte.{last_at}&select=is_hot"))
+    pending = tally(sec("GET", f"/vote?created_at=gt.{last_at}&select=is_hot"))
     target = sec("GET", "/setpoint?order=created_at.desc&limit=1")[0]
     total = sum(float(row["saved_usd"]) for row in sec("GET", "/saving?select=saved_usd"))
-    print(
-        f"\nlatest record: {record['ppl']} people, {record['temp_c']} °C, "
-        f"hot {record['hot_count']} / cold {record['cold_count']}, target {target['target_c']} °C"
-    )
+    print(f"\nlatest cycle: {latest['ppl']} people, {latest['temp_c']} °C, hot {counted[0]} / cold {counted[1]}, target {target['target_c']} °C")
+    print(f"votes since then: hot {pending[0]} / cold {pending[1]}")
     print(f"total saved: ${total:.4f}")
 
 
