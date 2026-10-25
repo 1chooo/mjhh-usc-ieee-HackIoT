@@ -1,0 +1,176 @@
+"""Fill the database with default data.
+
+Adds the four rooms the web app simulates (apps/web/lib/campus.ts) and two hours
+of history for each: people counts every minute, temperatures every 5 minutes,
+votes, and model setpoints. Each room ends at the web app's default readings, so
+room_now shows the same numbers the simulator starts from.
+
+    python3 apps/backend/scripts/seed.py            # stops if those rooms already have data
+    python3 apps/backend/scripts/seed.py --reset    # deletes their votes, readings and setpoints first
+
+Needs SUPABASE_SECRET_KEY from the environment or apps/backend/.env (gitignored).
+SUPABASE_URL defaults to the hosted project. Standard library only.
+"""
+
+import argparse
+import json
+import os
+import random
+import sys
+import urllib.error
+import urllib.request
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+DEFAULT_URL = "https://avcqkyfobsalzdzzgvqm.supabase.co"
+HISTORY_MINUTES = 120
+TABLES = ("vote", "occupancy_reading", "temp_reading", "setpoint")
+
+# ppl and temp are keypoints (minutes ago, value), interpolated with a little noise.
+# votes are windows (hot, cold, from minutes ago, to minutes ago); the 1-9 minute window
+# is what room_now counts, so it matches the web app's hotVotes / coldVotes.
+# setpoints are (minutes ago, target_c), as if the model ran about once an hour.
+ROOMS = [
+    {
+        "id": "leavey-reading",
+        "name": "Leavey Library – Reading Room",
+        "ppl": [(120, 40), (60, 58), (0, 72)],
+        "temp": [(120, 23.6), (0, 24.8)],
+        "votes": [(14, 3, 1, 9), (20, 6, 15, 120)],
+        "setpoints": [(110, 24.0), (50, 23.5), (10, 23.0)],
+    },
+    {
+        "id": "doheny-2",
+        "name": "Doheny Memorial Library – Second Floor",
+        "ppl": [(120, 30), (60, 26), (0, 22)],
+        "temp": [(120, 23.0), (0, 23.4)],
+        "votes": [(2, 2, 1, 9), (4, 3, 15, 120)],
+        "setpoints": [(110, 24.0), (50, 24.0), (10, 24.0)],
+    },
+    {
+        "id": "thh-201",
+        "name": "Taper Hall – THH 201",
+        "ppl": [(120, 0), (30, 0), (25, 34), (0, 36)],
+        "temp": [(120, 23.5), (25, 23.2), (0, 21.4)],
+        "votes": [(1, 12, 1, 9), (0, 5, 12, 25)],
+        "setpoints": [(110, 26.0), (35, 23.0), (10, 24.0)],
+    },
+    {
+        "id": "sal-127",
+        "name": "Salvatori – SAL 127",
+        "ppl": [(120, 27), (65, 28), (60, 0), (0, 0)],
+        "temp": [(120, 23.0), (0, 22.6)],
+        "votes": [(5, 2, 65, 120)],
+        "setpoints": [(110, 23.0), (50, 26.0)],
+    },
+]
+
+
+def load_env():
+    if not ENV_FILE.exists():
+        return
+    for line in ENV_FILE.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
+def call(url, key, method, path, body=None, prefer=None):
+    headers = {"apikey": key, "Content-Type": "application/json"}
+    if prefer:
+        headers["Prefer"] = prefer
+    req = urllib.request.Request(
+        url.rstrip("/") + "/rest/v1" + path,
+        method=method,
+        data=None if body is None else json.dumps(body).encode(),
+        headers=headers,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            status, raw = res.status, res.read()
+    except urllib.error.HTTPError as err:
+        status, raw = err.code, err.read()
+    data = json.loads(raw) if raw else None
+    if status >= 300:
+        sys.exit(f"{method} {path} failed with HTTP {status}: {data}")
+    return data
+
+
+def interpolate(points, minutes_ago):
+    for (m1, v1), (m2, v2) in zip(points, points[1:]):
+        if m2 <= minutes_ago <= m1:
+            return v1 if m1 == m2 else v1 + (v2 - v1) * (m1 - minutes_ago) / (m1 - m2)
+    return points[-1][1]
+
+
+def build_rows(now, rng):
+    rows = {table: [] for table in TABLES}
+
+    def at(minutes_ago):
+        return (now - timedelta(minutes=minutes_ago)).isoformat()
+
+    for room in ROOMS:
+        rid = room["id"]
+        for m in range(HISTORY_MINUTES, -1, -1):
+            ppl = interpolate(room["ppl"], m)
+            if m and ppl > 0:
+                ppl += rng.uniform(-2, 2)
+            rows["occupancy_reading"].append({"room_id": rid, "ppl": max(0, round(ppl)), "created_at": at(m)})
+        for m in range(HISTORY_MINUTES, -1, -5):
+            temp = interpolate(room["temp"], m) + (rng.uniform(-0.15, 0.15) if m else 0)
+            rows["temp_reading"].append({"room_id": rid, "temp_c": round(temp, 1), "created_at": at(m)})
+        for hot, cold, lo, hi in room["votes"]:
+            for is_hot, count in ((True, hot), (False, cold)):
+                for _ in range(count):
+                    rows["vote"].append({"room_id": rid, "is_hot": is_hot, "created_at": at(rng.uniform(lo, hi))})
+        for m, target in room["setpoints"]:
+            rows["setpoint"].append({"room_id": rid, "target_c": target, "created_at": at(m)})
+    return rows
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--reset", action="store_true", help="delete existing votes, readings and setpoints for these rooms first")
+    args = parser.parse_args()
+
+    load_env()
+    url = os.environ.get("SUPABASE_URL", DEFAULT_URL)
+    key = os.environ.get("SUPABASE_SECRET_KEY")
+    if not key:
+        sys.exit(f"Set SUPABASE_SECRET_KEY in the environment or in {ENV_FILE}")
+
+    def sec(*args, **kwargs):
+        return call(url, key, *args, **kwargs)
+
+    in_rooms = "room_id=in.(" + ",".join(room["id"] for room in ROOMS) + ")"
+    print(f"Seeding {url}")
+
+    sec("POST", "/room", [{"id": room["id"], "name": room["name"]} for room in ROOMS], prefer="resolution=merge-duplicates")
+    print(f"  {len(ROOMS)} rooms added or updated")
+
+    if args.reset:
+        for table in TABLES:
+            sec("DELETE", f"/{table}?{in_rooms}")
+        print("  cleared existing votes, readings and setpoints for these rooms")
+    else:
+        busy = [table for table in TABLES if sec("GET", f"/{table}?{in_rooms}&select=id&limit=1")]
+        if busy:
+            sys.exit(f"These rooms already have rows in {', '.join(busy)}. Rerun with --reset to replace them.")
+
+    rows = build_rows(datetime.now(timezone.utc), random.Random(7))
+    for table in TABLES:
+        sec("POST", f"/{table}", rows[table])
+        print(f"  {len(rows[table]):>4} rows into {table}")
+
+    print("\nroom_now:")
+    for row in sec("GET", f"/room_now?{in_rooms}&order=room_id"):
+        print(
+            f"  {row['room_id']:<15} {row['ppl']:>3} people  {row['temp_c']:>4} °C  "
+            f"hot {row['hot_count']:>2} / cold {row['cold_count']:>2}  target {row['target_c']} °C"
+        )
+
+
+if __name__ == "__main__":
+    main()
