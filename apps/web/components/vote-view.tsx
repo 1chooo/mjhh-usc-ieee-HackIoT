@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Vote } from "../lib/campus";
 
 const sides: { vote: Vote; label: string; hint: string }[] = [
@@ -47,20 +47,64 @@ function VoteIcon({ vote }: { vote: Vote }) {
   );
 }
 
-// Not wired up yet. Replace with the backend call.
+// Supabase REST, see apps/backend/API.md. The publishable key may only read and cast votes.
+const restUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1`;
+const headers = {
+  apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
+  "Content-Type": "application/json",
+};
+
+async function rest<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${restUrl}${path}`, { ...init, headers });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
+}
+
 async function submitVote(vote: Vote): Promise<void> {
-  void vote;
+  await rest("/vote", { method: "POST", body: JSON.stringify({ is_hot: vote === "hot" }) });
+}
+
+// Votes cast since the latest record: the count the Pi will use on its next cycle.
+async function fetchLiveCount(): Promise<{ hot: number; cold: number }> {
+  const last = await rest<{ created_at: string }[]>(
+    "/record?select=created_at&order=created_at.desc&limit=1",
+  );
+  const since = encodeURIComponent(last[0]?.created_at ?? "1970-01-01T00:00:00Z");
+  const votes = await rest<{ is_hot: boolean }[]>(`/vote?select=is_hot&created_at=gt.${since}`);
+  const hot = votes.filter((v) => v.is_hot).length;
+  return { hot, cold: votes.length - hot };
 }
 
 export function VoteView() {
   const [myVote, setMyVote] = useState<Vote | null>(null);
   const [sending, setSending] = useState(false);
+  const [count, setCount] = useState<{ hot: number; cold: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    try {
+      setCount(await fetchLiveCount());
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+    const timer = setInterval(() => void refresh(), 3000);
+    return () => clearInterval(timer);
+  }, []);
 
   async function vote(next: Vote) {
     setSending(true);
+    setError(null);
     try {
       await submitVote(next);
       setMyVote(next);
+      await refresh();
+    } catch (e) {
+      setError(String(e));
     } finally {
       setSending(false);
     }
@@ -85,6 +129,12 @@ export function VoteView() {
           </button>
         ))}
       </div>
+      <p>
+        {count
+          ? `This cycle so far: ${count.cold} cold, ${count.hot} hot`
+          : "Loading votes…"}
+      </p>
+      {error && <p role="alert">Vote failed: {error}</p>}
     </div>
   );
 }
