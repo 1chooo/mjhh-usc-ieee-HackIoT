@@ -396,7 +396,7 @@ function BillsView({ totals }: { totals: EnergyTotals }) {
         </tfoot>
       </table>
       <p className="energy-source">
-        LADWP R-1A, Zone 1, 2026 prices with adjustment factors. Each bill starts at Tier 1: first 700 kWh, next 1,400 kWh, then Tier 3.
+        LADWP R-1A, Zone 2 (USC), 2026 prices with adjustment factors. Each bill starts at Tier 1: first 1,000 kWh, next 2,000 kWh, then Tier 3.
         Power Access Charge and city tax not included.
       </p>
     </div>

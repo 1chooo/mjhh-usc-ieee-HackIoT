@@ -170,8 +170,8 @@ export function ScaleStory({
           buildings are reported in <Cite n={source.deChalendar} />. Each seated
           person adds 117 W of heat <Cite n={source.ashrae} />. Dollars use
           LADWP R-1A two-month bills <Cite n={source.ladwpRates} />,{" "}
-          <Cite n={source.ladwpTiers} />. Campus ZIP 90007 is Zone 2 in the rate
-          ordinance <Cite n={source.ladwpZones} />. This page prices Zone 1.
+          <Cite n={source.ladwpTiers} />, Zone 2 for campus ZIP 90007{" "}
+          <Cite n={source.ladwpZones} />.
           These figures estimate cooling electricity from the published studies.
         </p>
         <Link className="text-link" href="/impact">

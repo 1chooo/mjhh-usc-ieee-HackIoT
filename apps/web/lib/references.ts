@@ -72,7 +72,7 @@ export const references: readonly ReferenceEntry[] = [
       { text: ". Accessed: Oct. 25, 2026." },
     ],
     usedFor:
-      "Published kWh allotments, including the bi-monthly column. Zone 1 bi-monthly is the first 700 kWh, the next 1,400 kWh, then everything above 2,100 kWh. The simulator starts a new bill at Tier 1 every two months and uses these Zone 1 limits. Zone 2 bi-monthly on the same table is the first 1,000 kWh, the next 2,000 kWh, then above 3,000 kWh.",
+      "Published kWh allotments, including the bi-monthly column. Zone 2 bi-monthly is the first 1,000 kWh, the next 2,000 kWh, then everything above 3,000 kWh. The simulator starts a new bill at Tier 1 every two months and uses these Zone 2 limits.",
     links: [
       {
         href: "https://www.ladwp.com/account/understanding-your-rates/residential-electric-rates",
@@ -93,7 +93,7 @@ export const references: readonly ReferenceEntry[] = [
       { text: ". Accessed: Oct. 25, 2026." },
     ],
     usedFor:
-      "Zip-code table for Schedule R-1 zones. 90007, the USC campus, is printed under Zone 2. This page still prices the Zone 1 bi-monthly allotments in [2].",
+      "Zip-code table for Schedule R-1 zones. 90007, the USC campus, is printed under Zone 2, so the simulator uses the Zone 2 bi-monthly allotments in [2].",
     links: [
       {
         href: "https://www.ladwp.com/sites/default/files/documents/LADWP_Electric_Rates.pdf",
@@ -284,7 +284,7 @@ export const projectSources: readonly ProjectSource[] = [
     path: "apps/web/lib/billing.ts",
     href: `${repo}/apps/web/lib/billing.ts`,
     external: true,
-    note: "Two-month R-1A bills. Tier limits in code are the Zone 1 bi-monthly allotments, 700 kWh and 2,100 kWh.",
+    note: "Two-month R-1A bills. Tier limits in code are the Zone 2 bi-monthly allotments, 1,000 kWh and 3,000 kWh.",
   },
   {
     path: "apps/web/lib/sim-run.ts",

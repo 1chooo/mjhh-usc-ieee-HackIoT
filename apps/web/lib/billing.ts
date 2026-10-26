@@ -2,14 +2,14 @@
  * Electricity bills for the simulator: LADWP residential rate R-1A, billed every two months.
  *
  * Source: LADWP residential rates page, "Total consumption charges for 2026 (including
- * Adjustment Factors)", $/kWh by month. Tier sizes are Zone 1 (USC), doubled for a two-month
- * bill: Tier 1 the first 700 kWh, Tier 2 the next 1,400 kWh, Tier 3 everything above 2,100 kWh.
+ * Adjustment Factors)", $/kWh by month. Tier sizes are Zone 2 (USC, ZIP 90007), bi-monthly:
+ * Tier 1 the first 1,000 kWh, Tier 2 the next 2,000 kWh, Tier 3 everything above 3,000 kWh.
  * Each bill starts back at Tier 1, so splitting the year into two-month bills changes the cost.
  * Months after 2026 reuse the 2026 prices. Not included: the monthly Power Access Charge (the
  * same for both sides once usage is high) and the 10% city utility tax.
  */
 
-export const TIER_LIMITS_KWH = [700, 2100] as const;
+export const TIER_LIMITS_KWH = [1000, 3000] as const;
 
 /** [Tier 1, Tier 2, Tier 3] in $/kWh, by calendar month (1-12). */
 export function tierRates(month: number): readonly [number, number, number] {

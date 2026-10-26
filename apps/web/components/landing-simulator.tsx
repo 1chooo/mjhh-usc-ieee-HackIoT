@@ -299,12 +299,11 @@ export function LandingSimulator() {
             comfort-aware thermal policy, separate from the Pi’s learning model,
             under the same room conditions for the selected span. Electricity =
             thermal load ÷ COP. Cost = electricity × rate. CO₂e = electricity ×
-            grid factor. The rate starts at LADWP R-1A Zone 1 Tier 1 for
+            grid factor. The rate starts at LADWP R-1A Tier 1 for
             November <Cite n={source.ladwpRates} />, the month the simulator
-            starts. That price is the first 700 kWh on a Zone 1 bill{" "}
-            <Cite n={source.ladwpTiers} />. This page prices Zone 1. The rate
-            ordinance lists campus ZIP 90007 in Zone 2{" "}
-            <Cite n={source.ladwpZones} />. COP and the grid factor stay
+            starts. That price is the first 1,000 kWh on a Zone 2 bill{" "}
+            <Cite n={source.ladwpTiers} />, the zone the rate ordinance lists
+            for campus ZIP 90007 <Cite n={source.ladwpZones} />. COP and the grid factor stay
             illustrative.
           </p>
           <p>
